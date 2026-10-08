@@ -331,6 +331,25 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
   });
 
   // REST API Endpoints
+  app.post('/api/quizzes/broadcast', (req, res) => {
+    const { quiz, action } = req.body;
+    if (quiz) {
+      const quizPayload = JSON.stringify({
+        type: 'quiz_event',
+        action: action || 'created',
+        quiz,
+        timestamp: new Date().toISOString()
+      });
+
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(quizPayload);
+        }
+      });
+    }
+    res.json({ success: true, broadcastedTo: wss.clients.size });
+  });
+
   app.get('/api/study-rooms', (_req, res) => {
     // Dynamic active counts
     const rooms = INITIAL_ROOMS.map(r => ({
@@ -385,7 +404,35 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
     res.status(201).json(newMessage);
   });
 
-  // WebSocket Server for live collaborative study room chat
+  // Real-time Quiz / Test Broadcast Endpoint
+  app.post('/api/quizzes/broadcast', (req, res) => {
+    try {
+      const { quiz, action = 'created' } = req.body;
+      if (!quiz) {
+        return res.status(400).json({ error: 'Quiz object is required for broadcast' });
+      }
+
+      const broadcastPayload = JSON.stringify({
+        type: 'quiz_event',
+        action,
+        quiz,
+        timestamp: new Date().toISOString()
+      });
+
+      // Broadcast to ALL connected WebSocket clients across all rooms
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(broadcastPayload);
+        }
+      });
+
+      res.status(200).json({ success: true, message: 'Quiz broadcasted in real-time to all connected students.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to broadcast quiz event', details: err?.message });
+    }
+  });
+
+  // WebSocket Server for live collaborative study room chat & real-time test sync
   const wss = new WebSocketServer({ server, path: '/api/study-rooms-ws' });
 
   wss.on('connection', (ws) => {
@@ -488,6 +535,19 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
               });
             }
           }
+        } else if (parsed.type === 'create_quiz' || parsed.type === 'quiz_created') {
+          const quizPayload = JSON.stringify({
+            type: 'quiz_event',
+            action: 'created',
+            quiz: parsed.quiz,
+            timestamp: new Date().toISOString()
+          });
+
+          wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(quizPayload);
+            }
+          });
         }
       } catch (err) {
         console.error('WebSocket message parsing error:', err);
