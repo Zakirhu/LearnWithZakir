@@ -53,6 +53,7 @@ import { ClassLevel, QuizAttempt, StudyMaterial, SubjectId } from '../../types';
 import { GlobalLeaderboard } from '../GlobalLeaderboard';
 import { AchievementBadges } from '../AchievementBadges';
 import { TopScorersWidget } from '../TopScorersWidget';
+import { TopStudentsLeaderboard } from '../TopStudentsLeaderboard';
 import { ProgressReportModal } from '../ProgressReportModal';
 import { SEO } from '../SEO';
 
@@ -665,13 +666,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 6. TOP SCORERS & GLOBAL LEADERBOARD */}
-      <TopScorersWidget onStartQuizClick={onStartQuizClick} />
-      <GlobalLeaderboard
-        currentUserProfile={studentProfile}
-        currentUserAttempts={quizAttempts}
-        onStartQuizClick={onStartQuizClick}
-      />
+      {/* 6. TOP STUDENTS LEADERBOARD (GAMIFIED TOP ACCURACY & TOPICS COMPLETED) */}
+      <TopStudentsLeaderboard onStartQuizClick={onStartQuizClick} />
 
       {/* 7. SAVED BOOKMARKS & REVISION VAULT */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xs space-y-6">

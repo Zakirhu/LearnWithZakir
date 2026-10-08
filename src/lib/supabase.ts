@@ -159,3 +159,66 @@ export async function fetchDoubtsFromSupabase(): Promise<DoubtQuery[] | null> {
     return null;
   }
 }
+
+/**
+ * Saves uploaded PDF Chapter & extracted MCQs to Supabase 'pdf_chapters' table
+ */
+export async function savePdfChapterToSupabase(data: {
+  id?: string;
+  fileName: string;
+  classLevel: string;
+  subjectId: string;
+  chapterTitle: string;
+  questionCount: number;
+  extractedQuestions: any[];
+  pdfDataUrl?: string;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    const recordId = data.id || `pdf-ch-${Date.now()}`;
+    const { error } = await supabase
+      .from('pdf_chapters')
+      .upsert({
+        id: recordId,
+        file_name: data.fileName,
+        class_level: data.classLevel,
+        subject_id: data.subjectId,
+        chapter_title: data.chapterTitle,
+        question_count: data.questionCount,
+        extracted_questions: data.extractedQuestions,
+        pdf_data_url: data.pdfDataUrl || null,
+        created_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Supabase PDF chapter save warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error saving PDF chapter to Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Fetches all saved PDF chapters & extracted MCQs from Supabase 'pdf_chapters' table
+ */
+export async function fetchPdfChaptersFromSupabase(): Promise<any[] | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('pdf_chapters')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return null;
+    return data;
+  } catch (err) {
+    console.warn('Error fetching PDF chapters from Supabase:', err);
+    return null;
+  }
+}
+

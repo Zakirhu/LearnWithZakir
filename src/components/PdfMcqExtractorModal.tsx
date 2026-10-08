@@ -25,6 +25,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ClassLevel, SubjectId, Question, QuestionDifficulty, QuizConfig } from '../types';
 import { CLASSES_LIST, SUBJECTS_LIST, getSubjectsForClass, getChapters } from '../data/curriculumData';
+import { savePdfChapterToSupabase } from '../lib/supabase';
 
 interface ExtractedQuestionItem {
   id: string;
@@ -232,6 +233,17 @@ export const PdfMcqExtractorModal: React.FC<PdfMcqExtractorModalProps> = ({
         setExtractedQuestions(mapped);
         setHasCompleted(true);
         setSuccessToast(`Successfully extracted ${mapped.length} CBSE MCQs with answer keys!`);
+
+        // Sync extracted chapter and questions directly to Supabase
+        savePdfChapterToSupabase({
+          fileName: selectedFile?.name || 'Uploaded_Chapter.pdf',
+          classLevel,
+          subjectId,
+          chapterTitle: chapterTitle || 'Extracted PDF Chapter',
+          questionCount: mapped.length,
+          extractedQuestions: mapped,
+          pdfDataUrl: fileBase64 ? `data:application/pdf;base64,${fileBase64}` : undefined
+        });
       } else {
         throw new Error('No valid questions received from the extractor.');
       }

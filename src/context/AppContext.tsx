@@ -357,6 +357,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('zakir_pyq_papers', JSON.stringify(pyqPapers));
   }, [pyqPapers]);
 
+  // Real-time Quiz & Test Synchronization Listener (WebSocket + BroadcastChannel + Storage Event)
+  useEffect(() => {
+    // 1. Cross-tab BroadcastChannel
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      broadcastChannel = new BroadcastChannel('zakir_live_tests_sync');
+      broadcastChannel.onmessage = (event) => {
+        if (event.data && event.data.type === 'QUIZ_CREATED' && event.data.quiz) {
+          const incomingQuiz: QuizConfig = event.data.quiz;
+          setQuizzes(prev => {
+            if (prev.some(q => q.id === incomingQuiz.id)) return prev;
+            return [incomingQuiz, ...prev];
+          });
+        }
+      };
+    } catch {
+      // BroadcastChannel not available in legacy environments
+    }
+
+    // 2. Storage event listener for cross-tab local storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'zakir_quizzes' && e.newValue) {
+        try {
+          const updatedQuizzes: QuizConfig[] = JSON.parse(e.newValue);
+          setQuizzes(updatedQuizzes);
+        } catch {
+          // ignore parse errors
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 3. Live WebSocket listener for real-time test creation across any device or browser session
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectWebSocket = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/study-rooms-ws`;
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          ws?.send(JSON.stringify({ type: 'join_room', roomId: 'global-test-sync', userName: 'RealTimeSync' }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'quiz_event' && data.quiz) {
+              const incomingQuiz: QuizConfig = data.quiz;
+              setQuizzes(prev => {
+                if (prev.some(q => q.id === incomingQuiz.id)) return prev;
+
+                // Fire notification
+                addNotification({
+                  title: `⚡ Live Test Created: Class ${incomingQuiz.classLevel}`,
+                  message: `Educator published "${incomingQuiz.title}" (${incomingQuiz.questionsCount} questions, ${incomingQuiz.timeLimitMinutes} mins). Click to attempt live!`,
+                  category: 'quiz',
+                  classLevel: incomingQuiz.classLevel,
+                  linkTab: 'quiz'
+                });
+
+                return [incomingQuiz, ...prev];
+              });
+            }
+          } catch {
+            // ignore non-JSON socket messages
+          }
+        };
+
+        ws.onclose = () => {
+          reconnectTimeout = setTimeout(connectWebSocket, 5000);
+        };
+      } catch {
+        // ws error
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (broadcastChannel) broadcastChannel.close();
+      window.removeEventListener('storage', handleStorageChange);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) ws.close();
+    };
+  }, []);
+
   // Auth Operations
   const openAuthModal = (tab: 'login' | 'register' | 'admin' = 'login', notice: string = '', onSuccess?: AuthSuccessCallback) => {
     setAuthModalTab(tab);
@@ -600,12 +689,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setQuizzes(prev => [newQuiz, ...prev]);
 
     addNotification({
-      title: `New Assessment Published: Class ${quiz.classLevel}`,
+      title: `⚡ Live Assessment Published: Class ${quiz.classLevel}`,
       message: `${quiz.title} (${quiz.questionsCount} questions, ${quiz.timeLimitMinutes} mins).`,
       category: 'quiz',
       classLevel: quiz.classLevel,
       linkTab: 'quiz'
     });
+
+    // 1. Broadcast via HTTP endpoint to all connected WebSocket clients
+    try {
+      fetch('/api/quizzes/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quiz: newQuiz, action: 'created' })
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
+
+    // 2. Broadcast via BroadcastChannel
+    try {
+      const channel = new BroadcastChannel('zakir_live_tests_sync');
+      channel.postMessage({ type: 'QUIZ_CREATED', quiz: newQuiz });
+      channel.close();
+    } catch {
+      // ignore
+    }
   };
 
   const deleteQuiz = (id: string) => {

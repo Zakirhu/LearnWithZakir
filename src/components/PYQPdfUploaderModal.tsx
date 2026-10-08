@@ -20,6 +20,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ClassLevel, SubjectId, PYQPaper, PYQQuestionItem } from '../types';
 import { CLASSES_LIST } from '../data/curriculumData';
+import { savePdfChapterToSupabase } from '../lib/supabase';
 
 interface PYQPdfUploaderModalProps {
   isOpen: boolean;
@@ -204,6 +205,18 @@ export const PYQPdfUploaderModal: React.FC<PYQPdfUploaderModalProps> = ({
         fileSize: fileSizeStr || '1.2 MB',
         markingSchemePdfUrl: markingSchemeDataUrl || undefined,
         markingSchemeFileName: markingSchemeFile?.name || undefined
+      });
+
+      // Sync Previous Year Paper PDF metadata to Supabase
+      savePdfChapterToSupabase({
+        id: `pyq-${year}-${classLevel}-${subjectId}-${Date.now()}`,
+        fileName: selectedFile?.name || `CBSE_Class_${classLevel}_${code}_${year}.pdf`,
+        classLevel,
+        subjectId,
+        chapterTitle: `${year} CBSE Board Paper (${examType})`,
+        questionCount: sampleQuestions.length,
+        extractedQuestions: sampleQuestions,
+        pdfDataUrl: pdfDataUrl || undefined
       });
 
       setSuccessToast(`✓ Previous Year Paper for Class ${classLevel} (${year}) published!`);
