@@ -260,6 +260,44 @@ export async function savePdfChapterToSupabase(data: {
 
   try {
     const recordId = data.id || `pdf-ch-${Date.now()}`;
+    let finalPdfUrl = data.pdfDataUrl || null;
+
+    // If PDF data URL is very large (> 600k chars), PostgREST request body size limit (1MB) may reject it.
+    // Try uploading to Supabase Storage bucket 'pdf-materials' if possible, or omit heavy base64 string while preserving metadata & extracted questions.
+    if (finalPdfUrl && finalPdfUrl.length > 600000) {
+      try {
+        const base64Data = finalPdfUrl.split(',')[1];
+        if (base64Data) {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+          const filePath = `${data.classLevel}/${data.subjectId}/${Date.now()}_${data.fileName}`;
+          
+          const { data: storageData, error: storageError } = await supabase.storage
+            .from('pdf-materials')
+            .upload(filePath, blob, { upsert: true });
+
+          if (!storageError && storageData) {
+            const { data: publicUrlData } = supabase.storage
+              .from('pdf-materials')
+              .getPublicUrl(filePath);
+            if (publicUrlData?.publicUrl) {
+              finalPdfUrl = publicUrlData.publicUrl;
+            }
+          } else {
+            // Storage bucket not created or upload failed - omit heavy base64 so database upsert succeeds with metadata & questions
+            finalPdfUrl = null;
+          }
+        }
+      } catch (storageErr) {
+        finalPdfUrl = null;
+      }
+    }
+
     const { error } = await supabase
       .from('pdf_chapters')
       .upsert({
@@ -270,12 +308,29 @@ export async function savePdfChapterToSupabase(data: {
         chapter_title: data.chapterTitle,
         question_count: data.questionCount,
         extracted_questions: data.extractedQuestions,
-        pdf_data_url: data.pdfDataUrl || null,
+        pdf_data_url: finalPdfUrl,
         created_at: new Date().toISOString()
       }, { onConflict: 'id' });
 
     if (error) {
       console.warn('Supabase PDF chapter save warning:', error.message);
+      // Fallback: retry without pdf_data_url if table row save failed
+      if (finalPdfUrl !== null) {
+        const { error: retryError } = await supabase
+          .from('pdf_chapters')
+          .upsert({
+            id: recordId,
+            file_name: data.fileName,
+            class_level: data.classLevel,
+            subject_id: data.subjectId,
+            chapter_title: data.chapterTitle,
+            question_count: data.questionCount,
+            extracted_questions: data.extractedQuestions,
+            pdf_data_url: null,
+            created_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (!retryError) return true;
+      }
       return false;
     }
     return true;

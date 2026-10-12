@@ -394,77 +394,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCertificateAttempt, setActiveCertificateAttempt] = useState<QuizAttempt | null>(null);
   const [activeTestForReview, setActiveTestForReview] = useState<QuizAttempt | null>(null);
 
+  // Safe localStorage persistence helper to prevent QuotaExceededError white screens
+  const safeLocalStorageSet = (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (err) {
+      console.warn(`LocalStorage quota exceeded for ${key}:`, err);
+      if (key === 'zakir_study_materials' && Array.isArray(data)) {
+        try {
+          // Fallback: store lightweight study materials without heavy base64 pdfDataUrl strings in localStorage
+          const lightweight = data.map((m: any) => ({ ...m, pdfDataUrl: undefined }));
+          localStorage.setItem(key, JSON.stringify(lightweight));
+        } catch (e2) {
+          console.warn('Lightweight storage fallback failed:', e2);
+        }
+      }
+    }
+  };
+
   // Sync state to LocalStorage
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('zakir_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('zakir_current_user');
+    try {
+      if (currentUser) {
+        localStorage.setItem('zakir_current_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('zakir_current_user');
+      }
+    } catch (e) {
+      console.warn('LocalStorage error:', e);
     }
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_registered_students', JSON.stringify(registeredStudents));
+    safeLocalStorageSet('zakir_registered_students', registeredStudents);
   }, [registeredStudents]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_student_profile', JSON.stringify(studentProfile));
+    safeLocalStorageSet('zakir_student_profile', studentProfile);
   }, [studentProfile]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_custom_classes', JSON.stringify(customClasses));
+    safeLocalStorageSet('zakir_custom_classes', customClasses);
   }, [customClasses]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_custom_subjects', JSON.stringify(customSubjects));
+    safeLocalStorageSet('zakir_custom_subjects', customSubjects);
   }, [customSubjects]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_custom_chapters', JSON.stringify(customChapters));
+    safeLocalStorageSet('zakir_custom_chapters', customChapters);
   }, [customChapters]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_learning_resources', JSON.stringify(learningResources));
+    safeLocalStorageSet('zakir_learning_resources', learningResources);
   }, [learningResources]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_study_materials', JSON.stringify(studyMaterials));
+    safeLocalStorageSet('zakir_study_materials', studyMaterials);
   }, [studyMaterials]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_questions', JSON.stringify(questionBank));
+    safeLocalStorageSet('zakir_questions', questionBank);
   }, [questionBank]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_quizzes', JSON.stringify(quizzes));
+    safeLocalStorageSet('zakir_quizzes', quizzes);
   }, [quizzes]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_quiz_attempts', JSON.stringify(quizAttempts));
+    safeLocalStorageSet('zakir_quiz_attempts', quizAttempts);
   }, [quizAttempts]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_doubts', JSON.stringify(doubts));
+    safeLocalStorageSet('zakir_doubts', doubts);
   }, [doubts]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_notifications', JSON.stringify(notifications));
+    safeLocalStorageSet('zakir_notifications', notifications);
   }, [notifications]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_pyq_papers', JSON.stringify(pyqPapers));
+    safeLocalStorageSet('zakir_pyq_papers', pyqPapers);
   }, [pyqPapers]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_academic_sessions', JSON.stringify(academicSessions));
+    safeLocalStorageSet('zakir_academic_sessions', academicSessions);
   }, [academicSessions]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_lab_exams', JSON.stringify(labExams));
+    safeLocalStorageSet('zakir_lab_exams', labExams);
   }, [labExams]);
 
   useEffect(() => {
-    localStorage.setItem('zakir_lab_sessions', JSON.stringify(labExamSessions));
+    safeLocalStorageSet('zakir_lab_sessions', labExamSessions);
   }, [labExamSessions]);
 
   // Initial fetch from backend database store (/api/admin/store)

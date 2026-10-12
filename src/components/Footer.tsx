@@ -306,6 +306,24 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentTab }) => {
             >
               Academic Disclaimer
             </button>
+            <button
+              onClick={() => {
+                setCurrentTab('402');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="hover:text-amber-400 transition-colors cursor-pointer text-amber-500/80 font-bold"
+            >
+              402 Error / Quota
+            </button>
+            <button
+              onClick={() => {
+                setCurrentTab('offline');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="hover:text-slate-300 transition-colors cursor-pointer"
+            >
+              Site Not Reachable
+            </button>
             <a
               href="mailto:zakhu1099@gmail.com"
               className="hover:text-slate-300 transition-colors"

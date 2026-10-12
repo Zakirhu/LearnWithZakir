@@ -22,6 +22,7 @@ import { StudyRoomView } from './components/views/StudyRoomView';
 import { ChapterLmsView } from './components/views/ChapterLmsView';
 import { LabExamPortalView } from './components/views/LabExamPortalView';
 import { StudentLoginView } from './components/views/StudentLoginView';
+import { ErrorView } from './components/views/ErrorView';
 import { StudyMaterial, QuizConfig, QuizAttempt, ClassLevel, SubjectId } from './types';
 import { Lock, LogIn, GraduationCap, LayoutDashboard, ShieldAlert } from 'lucide-react';
 
@@ -303,6 +304,24 @@ const MainLayout: React.FC = () => {
             )}
 
             {currentTab === 'contact' && <ContactView />}
+
+            {(['error', '402', '404', '500', 'offline'].includes(currentTab)) && (
+              <ErrorView
+                initialErrorCode={
+                  currentTab === '402' ? '402' :
+                  currentTab === '500' ? '500' :
+                  currentTab === 'offline' ? 'offline' : '404'
+                }
+                onNavigateHome={() => {
+                  setCurrentTab('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onRetry={() => {
+                  setCurrentTab('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            )}
           </>
         )}
       </main>
