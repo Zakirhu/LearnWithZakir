@@ -10,7 +10,6 @@ import {
   CheckCircle2, 
   Eye, 
   EyeOff, 
-  Sparkles, 
   ShieldCheck, 
   HelpCircle,
   Hash,
@@ -107,13 +106,6 @@ export const StudentLoginView: React.FC<StudentLoginViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (uname: string, pass: string) => {
-    setIdentifier(uname);
-    setPassword(pass);
-    setErrorMessage('');
-    setSuccessMessage('');
   };
 
   const handleResetSubmit = async (e: React.FormEvent) => {
@@ -274,7 +266,7 @@ export const StudentLoginView: React.FC<StudentLoginViewProps> = ({
                     required
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="e.g. rahul_x, rahul.sharma@school.edu, or 1024"
+                    placeholder="e.g. username, student@school.edu, or Roll Number"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-hidden font-medium"
                   />
                 </div>
@@ -374,7 +366,7 @@ export const StudentLoginView: React.FC<StudentLoginViewProps> = ({
                     required
                     value={resetIdentifier}
                     onChange={(e) => setResetIdentifier(e.target.value)}
-                    placeholder="e.g. rahul_x, rahul.sharma@school.edu, or 1024"
+                    placeholder="e.g. username, student@school.edu, or Roll Number"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-hidden font-medium"
                   />
                 </div>
@@ -432,53 +424,6 @@ export const StudentLoginView: React.FC<StudentLoginViewProps> = ({
               </div>
             </form>
           )}
-
-          {/* Demo School Lab Accounts for Quick Testing */}
-          <div className="pt-4 border-t border-slate-100 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold text-slate-700 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>School Lab Demo Accounts (Quick-Fill):</span>
-              </span>
-              <span className="text-[10px] text-slate-400">Click to autofill</span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('rahul_x', 'Student@123')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-left transition-all cursor-pointer flex items-center justify-between"
-              >
-                <div>
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span>Rahul Sharma</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-100 text-blue-800 font-bold">Class X - A</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                    User: rahul_x • Roll: 1024 • Pass: Student@123
-                  </p>
-                </div>
-                <span className="text-[11px] font-bold text-blue-600">Select →</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill('priya_xii', 'Student@123')}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-left transition-all cursor-pointer flex items-center justify-between"
-              >
-                <div>
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <span>Priya Patel</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-indigo-100 text-indigo-800 font-bold">Class XII - B</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                    User: priya_xii • Roll: 1208 • Pass: Student@123
-                  </p>
-                </div>
-                <span className="text-[11px] font-bold text-indigo-600">Select →</span>
-              </button>
-            </div>
-          </div>
 
           {/* Security & Role Separation Notice */}
           <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">

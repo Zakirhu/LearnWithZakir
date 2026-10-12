@@ -161,7 +161,7 @@ const MainLayout: React.FC = () => {
                   setCurrentTab('dashboard');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                onSwitchToAdmin={() => openAuthModal('admin', 'Sign in with Administrator Credentials (zakhu1099@gmail.com)')}
+                onSwitchToAdmin={() => openAuthModal('admin', 'Sign in with Administrator Credentials')}
               />
             )}
 
@@ -272,7 +272,7 @@ const MainLayout: React.FC = () => {
 
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                       <button
-                        onClick={() => openAuthModal('admin', 'Sign in with Administrator Credentials (zakhu1099@gmail.com)')}
+                        onClick={() => openAuthModal('admin', 'Sign in with Administrator Credentials')}
                         className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                       >
                         <Lock className="w-4 h-4" />

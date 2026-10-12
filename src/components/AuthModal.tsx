@@ -37,7 +37,7 @@ export const AuthModal: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
 
   // Admin Login Form
-  const [adminEmail, setAdminEmail] = useState('zakhu1099@gmail.com');
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
   // Register Form
@@ -83,8 +83,13 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
 
+    if (!adminEmail.trim()) {
+      setErrorMessage('Please enter your administrator email address.');
+      return;
+    }
+
     const res = login({
-      emailOrId: adminEmail.trim() || 'zakhu1099@gmail.com',
+      emailOrId: adminEmail.trim(),
       password: adminPassword,
       role: 'admin'
     });
@@ -250,7 +255,7 @@ export const AuthModal: React.FC = () => {
                         required
                         value={loginEmailOrId}
                         onChange={(e) => setLoginEmailOrId(e.target.value)}
-                        placeholder="e.g. rahul@school.com or STD-X-1024"
+                        placeholder="e.g. username@school.edu or STD-X-1024"
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
                     </div>
@@ -397,7 +402,7 @@ export const AuthModal: React.FC = () => {
                       required
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
-                      placeholder="zakhu1099@gmail.com"
+                      placeholder="Enter administrator email address"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-purple-600 focus:outline-none"
                     />
                   </div>
@@ -463,7 +468,7 @@ export const AuthModal: React.FC = () => {
                       required
                       value={loginEmailOrId}
                       onChange={(e) => setLoginEmailOrId(e.target.value)}
-                      placeholder="e.g. rahul_x, rahul@school.com, or Roll 1024"
+                      placeholder="e.g. username, email@school.edu, or Roll No"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
                   </div>

@@ -198,71 +198,9 @@ const ADMIN_ACCOUNT: UserAccount = {
   isActive: true
 };
 
-const SEED_STUDENT_RAHUL: UserAccount = {
-  id: 'usr-std-101',
-  name: 'Rahul Sharma',
-  username: 'rahul_x',
-  email: 'rahul.sharma@school.edu',
-  studentId: 'STD-X-1024',
-  rollNumber: '1024',
-  classLevel: 'X',
-  section: 'A',
-  role: 'student',
-  password: 'Student@123',
-  schoolName: 'Delhi Public School, R.K. Puram',
-  targetExamYear: '2026',
-  avatarSeed: 'Rahul',
-  createdAt: '2026-01-10',
-  isActive: true,
-  isLocked: false,
-  enrolledSubjects: ['it-402', 'ca-165']
-};
-
-const SEED_STUDENT_PRIYA: UserAccount = {
-  id: 'usr-std-102',
-  name: 'Priya Patel',
-  username: 'priya_xii',
-  email: 'priya.patel@school.edu',
-  studentId: 'STD-XII-1208',
-  rollNumber: '1208',
-  classLevel: 'XII',
-  section: 'B',
-  role: 'student',
-  password: 'Student@123',
-  schoolName: 'Kendriya Vidyalaya No. 1',
-  targetExamYear: '2026',
-  avatarSeed: 'Priya',
-  createdAt: '2026-01-12',
-  isActive: true,
-  isLocked: false,
-  enrolledSubjects: ['ip-065', 'typo-817']
-};
-
-const SEED_STUDENT_AMAN: UserAccount = {
-  id: 'usr-std-103',
-  name: 'Aman Verma',
-  username: 'aman_ix',
-  email: 'aman.verma@school.edu',
-  studentId: 'STD-IX-9015',
-  rollNumber: '9015',
-  classLevel: 'IX',
-  section: 'A',
-  role: 'student',
-  password: 'Student@123',
-  schoolName: 'Modern School, Barakhamba',
-  targetExamYear: '2027',
-  avatarSeed: 'Aman',
-  createdAt: '2026-01-15',
-  isActive: true,
-  isLocked: false,
-  enrolledSubjects: ['it-402', 'ca-165']
-};
-
+// Registered accounts array initialized with Admin (empty student roster for production)
 const DEFAULT_STUDENTS: UserAccount[] = [
-  ADMIN_ACCOUNT,
-  SEED_STUDENT_RAHUL,
-  SEED_STUDENT_PRIYA,
-  SEED_STUDENT_AMAN
+  ADMIN_ACCOUNT
 ];
 
 const DEFAULT_PROFILE: StudentProfile = {
@@ -308,11 +246,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed: UserAccount[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 1) {
-          // Ensure seed students are also present if not already added
-          const existingIds = new Set(parsed.map(s => s.id));
-          const missingSeeds = DEFAULT_STUDENTS.filter(s => !existingIds.has(s.id));
-          return [...parsed, ...missingSeeds];
+        if (Array.isArray(parsed)) {
+          // Filter out legacy demo seed student IDs so they don't persist
+          const demoIds = new Set(['usr-std-101', 'usr-std-102', 'usr-std-103', 'usr-student-1', 'usr-student-2', 'usr-student-3']);
+          const cleaned = parsed.filter(s => !demoIds.has(s.id));
+          const hasAdmin = cleaned.some(s => s.role === 'admin' || s.id === ADMIN_ACCOUNT.id);
+          const finalRoster = hasAdmin ? cleaned : [ADMIN_ACCOUNT, ...cleaned];
+          return finalRoster;
         }
       } catch {}
     }
