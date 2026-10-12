@@ -448,59 +448,8 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
   // Persistent Admin Database Store (data/admin_store.json)
   const ADMIN_DB_PATH = path.join(__dirname, 'data', 'admin_store.json');
 
-  const DEFAULT_SEED_STUDENTS = [
-    {
-      id: 'usr-student-1',
-      name: 'Rahul Sharma',
-      email: 'rahul.sharma@school.edu',
-      username: 'rahul_x',
-      studentId: 'STD-X-1024',
-      rollNumber: '1024',
-      classLevel: 'X',
-      section: 'A',
-      role: 'student',
-      schoolName: 'Zakir Learning Hub Partner School',
-      password: 'Student@123',
-      isActive: true,
-      isLocked: false,
-      enrolledSubjects: ['it-402', 'ca-165'],
-      createdAt: '2026-01-10'
-    },
-    {
-      id: 'usr-student-2',
-      name: 'Priya Patel',
-      email: 'priya.patel@school.edu',
-      username: 'priya_xii',
-      studentId: 'STD-XII-1208',
-      rollNumber: '1208',
-      classLevel: 'XII',
-      section: 'B',
-      role: 'student',
-      schoolName: 'Zakir Learning Hub Partner School',
-      password: 'Student@123',
-      isActive: true,
-      isLocked: false,
-      enrolledSubjects: ['ip-065', 'typo-817'],
-      createdAt: '2026-01-15'
-    },
-    {
-      id: 'usr-student-3',
-      name: 'Arjun Verma',
-      email: 'arjun.verma@school.edu',
-      username: 'arjun_xi',
-      studentId: 'STD-XI-1105',
-      rollNumber: '1105',
-      classLevel: 'XI',
-      section: 'A',
-      role: 'student',
-      schoolName: 'Zakir Learning Hub Partner School',
-      password: 'Student@123',
-      isActive: true,
-      isLocked: false,
-      enrolledSubjects: ['ip-065'],
-      createdAt: '2026-02-01'
-    }
-  ];
+  // Default students: empty for production (enrolled via Admin CMS or CSV import)
+  const DEFAULT_SEED_STUDENTS: any[] = [];
 
   interface AdminStoreState {
     classes?: any[];
@@ -521,15 +470,15 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
       if (fs.existsSync(ADMIN_DB_PATH)) {
         const raw = fs.readFileSync(ADMIN_DB_PATH, 'utf-8');
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed.students) || parsed.students.length === 0) {
-          parsed.students = DEFAULT_SEED_STUDENTS;
+        if (!Array.isArray(parsed.students)) {
+          parsed.students = [];
         }
         return parsed;
       }
     } catch (e) {
       console.error('Error reading admin store:', e);
     }
-    return { students: DEFAULT_SEED_STUDENTS };
+    return { students: [] };
   };
 
   // Rate Limiting Security Map (IP -> attempts & lockout)
