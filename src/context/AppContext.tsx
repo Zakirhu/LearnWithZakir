@@ -12,17 +12,29 @@ import {
   DoubtQuery,
   AppNotification,
   UserAccount,
-  PYQPaper
+  PYQPaper,
+  AcademicSession,
+  ClassInfo,
+  LabExamConfig,
+  LabExamStudentSession,
+  LabExamStatus,
+  LearningResource
 } from '../types';
+import { DEFAULT_SEED_CHAPTERS, DEFAULT_SEED_RESOURCES } from '../data/seedLmsData';
 import { SEED_STUDY_MATERIALS } from '../data/seedStudyMaterials';
 import { SEED_QUESTIONS } from '../data/seedQuestions';
 import { SEED_QUIZZES } from '../data/seedQuizzes';
 import { INITIAL_PYQ_PAPERS } from '../data/pyqData';
+import { INITIAL_LAB_EXAMS, INITIAL_LAB_SESSIONS } from '../data/seedLabExams';
 import { CLASSES_LIST, SUBJECTS_LIST, CHAPTERS_DATA } from '../data/curriculumData';
 import { 
   syncProfileToSupabase, 
   saveQuizAttemptToSupabase, 
-  submitDoubtToSupabase 
+  submitDoubtToSupabase,
+  logUserLoginToSupabase,
+  bulkSyncStudentsToSupabase,
+  sendPasswordResetEmail,
+  updateSupabasePassword
 } from '../lib/supabase';
 
 export interface AuthSuccessCallback {
@@ -36,6 +48,13 @@ interface AppContextType {
   userRole: 'student' | 'admin';
   setUserRole: (role: 'student' | 'admin') => void;
   registeredStudents: UserAccount[];
+  addStudentManually: (data: { name: string; email: string; username?: string; studentId?: string; rollNumber?: string; classLevel: ClassLevel; section?: string; schoolName?: string; targetExamYear?: string; password?: string; isActive?: boolean }) => { success: boolean; message: string };
+  addStudentsBulk: (students: Array<{ name: string; email: string; username?: string; studentId?: string; rollNumber?: string; classLevel: ClassLevel; section?: string; schoolName?: string; targetExamYear?: string; password?: string; isActive?: boolean }>) => { count: number; message: string };
+  updateStudent: (id: string, updates: Partial<UserAccount>) => void;
+  deleteStudent: (studentIdOrEmail: string) => void;
+  toggleStudentLock: (id: string) => void;
+  setStudentPassword: (emailOrId: string, newPassword: string) => { success: boolean; message: string };
+  sendSupabaseResetEmail: (email: string) => Promise<{ success: boolean; message: string }>;
   
   // Auth Modal Controls
   isAuthModalOpen: boolean;
@@ -54,29 +73,55 @@ interface AppContextType {
   setSelectedClassFilter: (cl: ClassLevel | 'ALL') => void;
   selectedSubjectFilter: SubjectId | 'ALL';
   setSelectedSubjectFilter: (sub: SubjectId | 'ALL') => void;
+
+  // Academic Sessions Management
+  academicSessions: AcademicSession[];
+  addAcademicSession: (session: AcademicSession) => void;
+  updateAcademicSession: (id: string, updates: Partial<AcademicSession>) => void;
+  deleteAcademicSession: (id: string) => void;
+  setCurrentAcademicSession: (id: string) => void;
   
-  // Custom Curriculum Management
-  customClasses: Array<{ level: string; name: string; subtitle: string }>;
-  addCustomClass: (cls: { level: string; name: string; subtitle: string }) => void;
+  // Custom Curriculum Hierarchy Management
+  customClasses: Array<{ level: string; name: string; subtitle: string; order?: number; isHidden?: boolean; isActive?: boolean }>;
+  addCustomClass: (cls: { level: string; name: string; subtitle: string; order?: number; isHidden?: boolean; isActive?: boolean }) => void;
+  updateCustomClass: (level: string, updates: Partial<{ level: string; name: string; subtitle: string; order?: number; isHidden?: boolean; isActive?: boolean }>) => void;
   deleteCustomClass: (level: string) => void;
+  reorderClasses: (fromIndex: number, toIndex: number) => void;
   
   customSubjects: SubjectInfo[];
   addCustomSubject: (sub: SubjectInfo) => void;
+  updateCustomSubject: (id: string, updates: Partial<SubjectInfo>) => void;
   deleteCustomSubject: (id: string) => void;
+  reorderSubjects: (fromIndex: number, toIndex: number) => void;
   
   customChapters: Chapter[];
   addCustomChapter: (ch: Chapter) => void;
+  updateCustomChapter: (id: string, updates: Partial<Chapter>) => void;
   deleteCustomChapter: (id: string) => void;
+  reorderChapters: (fromIndex: number, toIndex: number) => void;
   
-  // Study Materials
+  // Dynamic Chapter-Wise Learning Resources (LMS)
+  learningResources: LearningResource[];
+  addLearningResource: (resource: Omit<LearningResource, 'id' | 'uploadedDate' | 'order'> & Partial<{ id: string; uploadedDate: string; order: number }>) => LearningResource;
+  updateLearningResource: (id: string, updates: Partial<LearningResource>) => void;
+  replaceResourceFile: (id: string, fileData: { fileName: string; fileSize?: string; fileUrl: string; pageCount?: number }) => void;
+  reorderLearningResources: (chapterId: string, fromIndex: number, toIndex: number) => void;
+  togglePublishLearningResource: (id: string) => void;
+  deleteLearningResource: (id: string) => void;
+  getResourcesForChapter: (chapterId: string, includeUnpublished?: boolean) => LearningResource[];
+  
+  // Study Materials (Legacy & Cross-compatible)
   studyMaterials: StudyMaterial[];
   addStudyMaterial: (material: Omit<StudyMaterial, 'id' | 'uploadedDate'>) => void;
+  updateStudyMaterial: (id: string, updates: Partial<StudyMaterial>) => void;
+  replaceStudyMaterial: (id: string, newFileData: Partial<StudyMaterial>) => void;
   deleteStudyMaterial: (id: string) => void;
   togglePublishMaterial: (id: string) => void;
   
   // Questions
   questionBank: Question[];
   addQuestion: (question: Omit<Question, 'id'>) => void;
+  updateQuestion: (id: string, updates: Partial<Question>) => void;
   deleteQuestion: (id: string) => void;
   togglePublishQuestion: (id: string) => void;
   
@@ -85,6 +130,24 @@ interface AppContextType {
   createQuiz: (quiz: Omit<QuizConfig, 'id'>) => void;
   deleteQuiz: (id: string) => void;
   togglePublishQuiz: (id: string) => void;
+
+  // Computer Lab Online Examination System
+  labExams: LabExamConfig[];
+  createLabExam: (exam: LabExamConfig) => void;
+  updateLabExam: (id: string, updates: Partial<LabExamConfig>) => void;
+  deleteLabExam: (id: string) => void;
+  duplicateLabExam: (id: string) => LabExamConfig | null;
+  setLabExamStatus: (id: string, status: LabExamStatus) => void;
+  labExamSessions: LabExamStudentSession[];
+  recordLabExamAnswer: (examId: string, studentId: string, questionId: string, answer: string | number, workstationIp?: string) => void;
+  submitLabExam: (examId: string, studentId: string) => void;
+  evaluateLabExamSession: (
+    sessionId: string, 
+    manualEvaluations: Record<string, { marks: number; feedback?: string }>,
+    options?: { evaluatorName?: string; teacherFeedback?: string; resultsReleased?: boolean }
+  ) => void;
+  reopenLabExamForStudent: (sessionId: string) => void;
+  releaseExamResults: (examId: string, showResultsImmediately: boolean, showAnswerKeysToStudents?: boolean) => void;
   
   // Attempts & Bookmarks
   quizAttempts: QuizAttempt[];
@@ -106,6 +169,7 @@ interface AppContextType {
   // Previous Years Papers (PYQs)
   pyqPapers: PYQPaper[];
   addPYQPaper: (paper: Omit<PYQPaper, 'id' | 'uploadedAt'>) => void;
+  updatePYQPaper: (id: string, updates: Partial<PYQPaper>) => void;
   deletePYQPaper: (id: string) => void;
   
   // Notifications
@@ -113,7 +177,8 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   addNotification: (notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => void;
   
-  syncAllCBSESkillMaterials: () => void;
+  syncAllCurriculumMaterials: () => void;
+  syncStoreToBackend: (data?: any) => Promise<void>;
   resetAllData: () => void;
 }
 
@@ -122,14 +187,83 @@ const ADMIN_ACCOUNT: UserAccount = {
   id: 'usr-admin-1',
   name: 'Mr. Zakir Hussain',
   email: 'zakhu1099@gmail.com',
+  username: 'admin',
   studentId: 'ADMIN-01',
+  rollNumber: '001',
   classLevel: 'XII',
+  section: 'Admin',
   role: 'admin',
   avatarSeed: 'Zakir',
-  createdAt: '2026-01-01'
+  createdAt: '2026-01-01',
+  isActive: true
 };
 
-const DEFAULT_STUDENTS: UserAccount[] = [ADMIN_ACCOUNT];
+const SEED_STUDENT_RAHUL: UserAccount = {
+  id: 'usr-std-101',
+  name: 'Rahul Sharma',
+  username: 'rahul_x',
+  email: 'rahul.sharma@school.edu',
+  studentId: 'STD-X-1024',
+  rollNumber: '1024',
+  classLevel: 'X',
+  section: 'A',
+  role: 'student',
+  password: 'Student@123',
+  schoolName: 'Delhi Public School, R.K. Puram',
+  targetExamYear: '2026',
+  avatarSeed: 'Rahul',
+  createdAt: '2026-01-10',
+  isActive: true,
+  isLocked: false,
+  enrolledSubjects: ['it-402', 'ca-165']
+};
+
+const SEED_STUDENT_PRIYA: UserAccount = {
+  id: 'usr-std-102',
+  name: 'Priya Patel',
+  username: 'priya_xii',
+  email: 'priya.patel@school.edu',
+  studentId: 'STD-XII-1208',
+  rollNumber: '1208',
+  classLevel: 'XII',
+  section: 'B',
+  role: 'student',
+  password: 'Student@123',
+  schoolName: 'Kendriya Vidyalaya No. 1',
+  targetExamYear: '2026',
+  avatarSeed: 'Priya',
+  createdAt: '2026-01-12',
+  isActive: true,
+  isLocked: false,
+  enrolledSubjects: ['ip-065', 'typo-817']
+};
+
+const SEED_STUDENT_AMAN: UserAccount = {
+  id: 'usr-std-103',
+  name: 'Aman Verma',
+  username: 'aman_ix',
+  email: 'aman.verma@school.edu',
+  studentId: 'STD-IX-9015',
+  rollNumber: '9015',
+  classLevel: 'IX',
+  section: 'A',
+  role: 'student',
+  password: 'Student@123',
+  schoolName: 'Modern School, Barakhamba',
+  targetExamYear: '2027',
+  avatarSeed: 'Aman',
+  createdAt: '2026-01-15',
+  isActive: true,
+  isLocked: false,
+  enrolledSubjects: ['it-402', 'ca-165']
+};
+
+const DEFAULT_STUDENTS: UserAccount[] = [
+  ADMIN_ACCOUNT,
+  SEED_STUDENT_RAHUL,
+  SEED_STUDENT_PRIYA,
+  SEED_STUDENT_AMAN
+];
 
 const DEFAULT_PROFILE: StudentProfile = {
   id: '',
@@ -171,7 +305,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [registeredStudents, setRegisteredStudents] = useState<UserAccount[]>(() => {
     const saved = localStorage.getItem('zakir_registered_students');
-    return saved ? JSON.parse(saved) : DEFAULT_STUDENTS;
+    if (saved) {
+      try {
+        const parsed: UserAccount[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 1) {
+          // Ensure seed students are also present if not already added
+          const existingIds = new Set(parsed.map(s => s.id));
+          const missingSeeds = DEFAULT_STUDENTS.filter(s => !existingIds.has(s.id));
+          return [...parsed, ...missingSeeds];
+        }
+      } catch {}
+    }
+    return DEFAULT_STUDENTS;
   });
 
   const [userRole, setUserRole] = useState<'student' | 'admin'>(() => {
@@ -214,51 +359,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [customChapters, setCustomChapters] = useState<Chapter[]>(() => {
     const saved = localStorage.getItem('zakir_custom_chapters');
-    return saved ? JSON.parse(saved) : CHAPTERS_DATA;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_SEED_CHAPTERS;
   });
 
-  // Production-ready clean reset: permanently delete all demo/test content
-  useEffect(() => {
-    const PROD_KEY = 'zakir_prod_clean_slate_2026_final_v2';
-    if (!localStorage.getItem(PROD_KEY)) {
-      // Purge all old demo/sample local storage records
-      localStorage.removeItem('zakir_study_materials');
-      localStorage.removeItem('zakir_questions');
-      localStorage.removeItem('zakir_quizzes');
-      localStorage.removeItem('zakir_quiz_attempts');
-      localStorage.removeItem('zakir_doubts');
-      localStorage.removeItem('zakir_notifications');
-      localStorage.removeItem('learn_zakir_highlights');
-      localStorage.removeItem('learn_zakir_stickynotes');
-      localStorage.removeItem('zakir_current_user');
-      
-      // Preserve only the real administrator account
-      localStorage.setItem('zakir_registered_students', JSON.stringify([ADMIN_ACCOUNT]));
-      localStorage.setItem('zakir_student_profile', JSON.stringify(DEFAULT_PROFILE));
-      localStorage.setItem('zakir_study_materials', JSON.stringify([]));
-      localStorage.setItem('zakir_questions', JSON.stringify([]));
-      localStorage.setItem('zakir_quizzes', JSON.stringify([]));
-      localStorage.setItem('zakir_quiz_attempts', JSON.stringify([]));
-      localStorage.setItem('zakir_doubts', JSON.stringify([]));
-      localStorage.setItem('zakir_notifications', JSON.stringify([]));
-      localStorage.setItem('zakir_custom_classes', JSON.stringify(CLASSES_LIST));
-      localStorage.setItem('zakir_custom_subjects', JSON.stringify(SUBJECTS_LIST));
-      localStorage.setItem('zakir_custom_chapters', JSON.stringify(CHAPTERS_DATA));
-      
-      localStorage.setItem(PROD_KEY, 'true');
+  const [learningResources, setLearningResources] = useState<LearningResource[]>(() => {
+    const saved = localStorage.getItem('zakir_learning_resources');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_SEED_RESOURCES;
+  });
 
-      setCurrentUser(null);
-      setRegisteredStudents([ADMIN_ACCOUNT]);
-      setStudentProfile(DEFAULT_PROFILE);
-      setStudyMaterials([]);
-      setQuestionBank([]);
-      setQuizzes([]);
-      setQuizAttempts([]);
-      setDoubts([]);
-      setNotifications([]);
-      setCustomClasses(CLASSES_LIST);
-      setCustomSubjects(SUBJECTS_LIST);
-      setCustomChapters(CHAPTERS_DATA);
+  // Ensure default chapters and learning resources are available if storage was cleared
+  useEffect(() => {
+    if (customChapters.length === 0) {
+      setCustomChapters(DEFAULT_SEED_CHAPTERS);
+    }
+    if (learningResources.length === 0) {
+      setLearningResources(DEFAULT_SEED_RESOURCES);
     }
   }, []);
 
@@ -297,6 +424,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_PYQ_PAPERS;
   });
 
+  const [academicSessions, setAcademicSessions] = useState<AcademicSession[]>(() => {
+    const saved = localStorage.getItem('zakir_academic_sessions');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return [
+      { id: 'sess-2025-26', name: '2025–2026', startDate: '2025-04-01', endDate: '2026-03-31', isCurrent: true },
+      { id: 'sess-2024-25', name: '2024–2025', startDate: '2024-04-01', endDate: '2025-03-31', isCurrent: false }
+    ];
+  });
+
+  const [labExams, setLabExams] = useState<LabExamConfig[]>(() => {
+    const saved = localStorage.getItem('zakir_lab_exams');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return INITIAL_LAB_EXAMS;
+  });
+
+  const [labExamSessions, setLabExamSessions] = useState<LabExamStudentSession[]>(() => {
+    const saved = localStorage.getItem('zakir_lab_sessions');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return INITIAL_LAB_SESSIONS;
+  });
+
   const [activeCertificateAttempt, setActiveCertificateAttempt] = useState<QuizAttempt | null>(null);
   const [activeTestForReview, setActiveTestForReview] = useState<QuizAttempt | null>(null);
 
@@ -330,6 +484,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [customChapters]);
 
   useEffect(() => {
+    localStorage.setItem('zakir_learning_resources', JSON.stringify(learningResources));
+  }, [learningResources]);
+
+  useEffect(() => {
     localStorage.setItem('zakir_study_materials', JSON.stringify(studyMaterials));
   }, [studyMaterials]);
 
@@ -356,6 +514,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('zakir_pyq_papers', JSON.stringify(pyqPapers));
   }, [pyqPapers]);
+
+  useEffect(() => {
+    localStorage.setItem('zakir_academic_sessions', JSON.stringify(academicSessions));
+  }, [academicSessions]);
+
+  useEffect(() => {
+    localStorage.setItem('zakir_lab_exams', JSON.stringify(labExams));
+  }, [labExams]);
+
+  useEffect(() => {
+    localStorage.setItem('zakir_lab_sessions', JSON.stringify(labExamSessions));
+  }, [labExamSessions]);
+
+  // Initial fetch from backend database store (/api/admin/store)
+  useEffect(() => {
+    fetch('/api/admin/store')
+      .then(res => res.json())
+      .then(json => {
+        if (json?.success && json?.data) {
+          const d = json.data;
+          if (Array.isArray(d.classes) && d.classes.length > 0) setCustomClasses(d.classes);
+          if (Array.isArray(d.subjects) && d.subjects.length > 0) setCustomSubjects(d.subjects);
+          if (Array.isArray(d.chapters) && d.chapters.length > 0) setCustomChapters(d.chapters);
+          if (Array.isArray(d.studyMaterials) && d.studyMaterials.length > 0) setStudyMaterials(d.studyMaterials);
+          if (Array.isArray(d.students) && d.students.length > 0) setRegisteredStudents(d.students);
+          if (Array.isArray(d.tests) && d.tests.length > 0) setLabExams(d.tests);
+          if (Array.isArray(d.attempts) && d.attempts.length > 0) setQuizAttempts(d.attempts);
+          if (Array.isArray(d.labSessions) && d.labSessions.length > 0) setLabExamSessions(d.labSessions);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Real-time Quiz & Test Synchronization Listener (WebSocket + BroadcastChannel + Storage Event)
   useEffect(() => {
@@ -465,18 +655,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     // Check if Administrator login
     if (
+      credentials.role === 'admin' ||
       q === 'admin' || 
       q === 'zakir' || 
       q === 'zakhu1099@gmail.com' || 
       q === 'tanhazakir66@gmail.com' || 
-      q === 'admin-01' || 
-      credentials.role === 'admin'
+      q === 'admin-01'
     ) {
       if (!credentials.password || credentials.password.trim() !== 'zakir@1630502') {
         return { success: false, message: 'Incorrect administrator password. Please try again.' };
       }
       setCurrentUser(ADMIN_ACCOUNT);
       setUserRole('admin');
+      logUserLoginToSupabase(ADMIN_ACCOUNT);
       closeAuthModal();
       if (authSuccessCallback?.cb) {
         authSuccessCallback.cb();
@@ -484,21 +675,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     }
 
-    // Check registered students
+    // Check registered students by Username, Email, Roll Number, or Student ID
     const matched = registeredStudents.find(
-      s => s.email.toLowerCase() === q || s.studentId.toLowerCase() === q
+      s => (s.username && s.username.toLowerCase() === q) ||
+           s.email.toLowerCase() === q ||
+           s.studentId.toLowerCase() === q ||
+           (s.rollNumber && s.rollNumber.toLowerCase() === q)
     );
 
     if (matched) {
+      // Security Check: Deactivated / Locked Account
+      if (matched.isLocked === true || matched.isActive === false) {
+        return { 
+          success: false, 
+          message: 'This student account has been deactivated or locked by the administrator. Please contact your school lab teacher.' 
+        };
+      }
+
+      // Check password
+      if (matched.password && credentials.password) {
+        if (matched.password.trim() !== credentials.password.trim()) {
+          return { success: false, message: 'Incorrect password. Click "Forgot / Set Password" to reset or contact your administrator.' };
+        }
+      } else if (!matched.password && credentials.password && credentials.password.trim().length >= 3) {
+        // Auto-assign password on first login if student hasn't set one yet
+        matched.password = credentials.password.trim();
+      } else if (matched.password && !credentials.password) {
+        return { success: false, message: 'Please enter your password to sign in.' };
+      }
+
       setCurrentUser(matched);
       setUserRole('student');
+      logUserLoginToSupabase(matched);
       setStudentProfile(prev => ({
         ...prev,
         id: matched.id,
         name: matched.name,
+        username: matched.username,
         email: matched.email,
         studentId: matched.studentId,
-        classLevel: matched.classLevel
+        rollNumber: matched.rollNumber,
+        classLevel: matched.classLevel,
+        section: matched.section || 'A',
+        schoolName: matched.schoolName || prev.schoolName,
+        enrolledSubjects: matched.enrolledSubjects || (
+          matched.classLevel === 'X' ? ['it-402', 'ca-165'] :
+          matched.classLevel === 'IX' ? ['it-402', 'ca-165'] :
+          matched.classLevel === 'XI' || matched.classLevel === 'XII' ? ['ip-065', 'typo-817'] :
+          ['cs-middle', 'ai-middle']
+        )
       }));
       closeAuthModal();
       if (authSuccessCallback?.cb) {
@@ -507,35 +732,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     }
 
-    // Allow student login with provided credentials
-    const newStudentSession: UserAccount = {
-      id: `usr-${Date.now()}`,
-      name: credentials.emailOrId.includes('@') ? credentials.emailOrId.split('@')[0] : credentials.emailOrId,
-      email: credentials.emailOrId.includes('@') ? credentials.emailOrId : `${credentials.emailOrId.toLowerCase()}@student.edu`,
-      studentId: `STD-${Math.floor(1000 + Math.random() * 9000)}`,
-      classLevel: 'X',
-      role: 'student',
-      avatarSeed: credentials.emailOrId
+    // If no match found:
+    return {
+      success: false,
+      message: 'Student account not found with this username, registered email, or roll number. Please verify your credentials or contact the school administrator.'
     };
-
-    setRegisteredStudents(prev => [...prev, newStudentSession]);
-    setCurrentUser(newStudentSession);
-    setUserRole('student');
-    
-    setStudentProfile(prev => ({
-      ...prev,
-      id: newStudentSession.id,
-      name: newStudentSession.name,
-      email: newStudentSession.email,
-      studentId: newStudentSession.studentId,
-      classLevel: newStudentSession.classLevel
-    }));
-
-    closeAuthModal();
-    if (authSuccessCallback?.cb) {
-      authSuccessCallback.cb();
-    }
-    return { success: true };
   };
 
   const register = (data: { name: string; email: string; studentId: string; classLevel: ClassLevel; password?: string }) => {
@@ -553,6 +754,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRegisteredStudents(prev => [...prev.filter(s => s.email !== newStudent.email), newStudent]);
     setCurrentUser(newStudent);
     setUserRole('student');
+    logUserLoginToSupabase(newStudent);
 
     setStudentProfile({
       id: newStudent.id,
@@ -590,6 +792,215 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserRole('student');
   };
 
+  // Student Directory Operations
+  const addStudentManually = (data: { name: string; email: string; username?: string; studentId?: string; rollNumber?: string; classLevel: ClassLevel; section?: string; schoolName?: string; targetExamYear?: string; password?: string; isActive?: boolean }) => {
+    const cleanEmail = data.email.trim().toLowerCase();
+    const cleanName = data.name.trim();
+    if (!cleanEmail || !cleanName) {
+      return { success: false, message: 'Student Name and Email are required.' };
+    }
+
+    const cleanUsername = (data.username?.trim().toLowerCase()) || cleanEmail.split('@')[0].replace(/[^a-z0-9_]/g, '');
+    const cleanRollNumber = data.rollNumber?.trim() || String(Math.floor(1000 + Math.random() * 9000));
+    const cleanStudentId = data.studentId?.trim() || `STD-${data.classLevel}-${cleanRollNumber}`;
+
+    const newStudent: UserAccount = {
+      id: `usr-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      name: cleanName,
+      email: cleanEmail,
+      username: cleanUsername,
+      studentId: cleanStudentId,
+      rollNumber: cleanRollNumber,
+      classLevel: data.classLevel,
+      section: data.section || 'A',
+      role: 'student',
+      avatarSeed: cleanName,
+      schoolName: data.schoolName || 'Zakir Learning Hub Partner School',
+      targetExamYear: data.targetExamYear || '2026',
+      password: data.password?.trim() || 'Student@123',
+      isActive: data.isActive !== false,
+      isLocked: data.isActive === false,
+      enrolledSubjects: data.classLevel === 'X' ? ['it-402', 'ca-165'] :
+                        data.classLevel === 'IX' ? ['it-402', 'ca-165'] :
+                        data.classLevel === 'XI' || data.classLevel === 'XII' ? ['ip-065', 'typo-817'] :
+                        ['cs-middle', 'ai-middle'],
+      createdAt: new Date().toISOString()
+    };
+
+    setRegisteredStudents(prev => {
+      const filtered = prev.filter(s => s.email.toLowerCase() !== cleanEmail && (s.username ? s.username.toLowerCase() !== cleanUsername : true));
+      return [...filtered, newStudent];
+    });
+
+    logUserLoginToSupabase(newStudent);
+    if (data.schoolName || data.targetExamYear) {
+      syncProfileToSupabase({
+        id: newStudent.id,
+        name: newStudent.name,
+        username: newStudent.username,
+        email: newStudent.email,
+        studentId: newStudent.studentId,
+        rollNumber: newStudent.rollNumber,
+        classLevel: newStudent.classLevel,
+        section: newStudent.section,
+        schoolName: data.schoolName,
+        targetExamYear: data.targetExamYear || '2026',
+        avatarSeed: newStudent.avatarSeed || newStudent.name,
+        enrolledSubjects: newStudent.enrolledSubjects || ['it-402'],
+        bookmarks: [],
+        bookmarkedQuestions: [],
+        chaptersCompletedCount: 0,
+        questionsSolvedCount: 0,
+        badges: []
+      });
+    }
+
+    return { success: true, message: `Student "${cleanName}" enrolled successfully with Username: "${cleanUsername}"!` };
+  };
+
+  const addStudentsBulk = (students: Array<{ name: string; email: string; username?: string; studentId?: string; rollNumber?: string; classLevel: ClassLevel; section?: string; schoolName?: string; targetExamYear?: string; password?: string; isActive?: boolean }>) => {
+    const validStudents: UserAccount[] = [];
+
+    students.forEach((s, idx) => {
+      const cleanEmail = s.email?.trim().toLowerCase();
+      const cleanName = s.name?.trim();
+      if (cleanEmail && cleanName) {
+        const cls: ClassLevel = (s.classLevel && ['VI','VII','VIII','IX','X','XI','XII'].includes(String(s.classLevel).toUpperCase())) 
+          ? String(s.classLevel).toUpperCase() as ClassLevel 
+          : 'X';
+
+        const cleanRoll = s.rollNumber?.trim() || String(1000 + idx);
+        const cleanId = s.studentId?.trim() || `STD-${cls}-${cleanRoll}`;
+        const cleanUser = s.username?.trim().toLowerCase() || cleanEmail.split('@')[0].replace(/[^a-z0-9_]/g, '');
+
+        validStudents.push({
+          id: `usr-bulk-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+          name: cleanName,
+          email: cleanEmail,
+          username: cleanUser,
+          studentId: cleanId,
+          rollNumber: cleanRoll,
+          classLevel: cls,
+          section: s.section || 'A',
+          role: 'student',
+          avatarSeed: cleanName,
+          schoolName: s.schoolName || 'Zakir Learning Hub Partner School',
+          targetExamYear: s.targetExamYear || '2026',
+          password: s.password?.trim() || 'Student@123',
+          isActive: s.isActive !== false,
+          isLocked: s.isActive === false,
+          enrolledSubjects: cls === 'X' ? ['it-402', 'ca-165'] :
+                            cls === 'IX' ? ['it-402', 'ca-165'] :
+                            cls === 'XI' || cls === 'XII' ? ['ip-065', 'typo-817'] :
+                            ['cs-middle', 'ai-middle'],
+          createdAt: new Date().toISOString()
+        });
+      }
+    });
+
+    if (validStudents.length === 0) {
+      return { count: 0, message: 'No valid student records found in the uploaded file.' };
+    }
+
+    setRegisteredStudents(prev => {
+      const existingEmails = new Set(prev.map(s => s.email.toLowerCase()));
+      const newEntries = validStudents.filter(s => !existingEmails.has(s.email.toLowerCase()));
+      return [...prev, ...newEntries];
+    });
+
+    bulkSyncStudentsToSupabase(validStudents.map(s => ({
+      id: s.id,
+      name: s.name,
+      username: s.username,
+      email: s.email,
+      studentId: s.studentId,
+      rollNumber: s.rollNumber,
+      classLevel: s.classLevel,
+      section: s.section,
+      schoolName: s.schoolName || 'Zakir Learning Hub Partner School',
+      targetExamYear: '2026'
+    })));
+
+    return { count: validStudents.length, message: `Successfully extracted and imported ${validStudents.length} students with individual credentials!` };
+  };
+
+  const setStudentPassword = (emailOrId: string, newPassword: string) => {
+    const q = emailOrId.trim().toLowerCase();
+    const cleanPass = newPassword.trim();
+
+    if (!cleanPass || cleanPass.length < 3) {
+      return { success: false, message: 'Password must be at least 3 characters long.' };
+    }
+
+    const matched = registeredStudents.find(
+      s => (s.username && s.username.toLowerCase() === q) ||
+           s.email.toLowerCase() === q || 
+           s.studentId.toLowerCase() === q ||
+           (s.rollNumber && s.rollNumber.toLowerCase() === q)
+    );
+
+    if (!matched) {
+      return { 
+        success: false, 
+        message: 'Student account not found for this Username, Email, or Roll ID. Please contact your administrator.' 
+      };
+    }
+
+    setRegisteredStudents(prev => prev.map(s => {
+      if (
+        (s.username && s.username.toLowerCase() === q) ||
+        s.email.toLowerCase() === q || 
+        s.studentId.toLowerCase() === q ||
+        (s.rollNumber && s.rollNumber.toLowerCase() === q)
+      ) {
+        return { ...s, password: cleanPass };
+      }
+      return s;
+    }));
+
+    return {
+      success: true,
+      message: `Password created/updated successfully for ${matched.name}! You can now sign in with your password.`
+    };
+  };
+
+  const sendSupabaseResetEmail = async (email: string) => {
+    return await sendPasswordResetEmail(email);
+  };
+
+  const deleteStudent = (studentIdOrEmail: string) => {
+    setRegisteredStudents(prev => prev.filter(s => 
+      s.email.toLowerCase() !== studentIdOrEmail.toLowerCase() && 
+      s.studentId?.toLowerCase() !== studentIdOrEmail.toLowerCase() &&
+      s.id !== studentIdOrEmail
+    ));
+  };
+
+  const updateStudent = (id: string, updates: Partial<UserAccount>) => {
+    setRegisteredStudents(prev => prev.map(s => (s.id === id || s.email === id || s.studentId === id) ? { ...s, ...updates } : s));
+  };
+
+  const toggleStudentLock = (id: string) => {
+    setRegisteredStudents(prev => prev.map(s => (s.id === id || s.email === id || s.studentId === id) ? { ...s, isLocked: !(s as any).isLocked } : s));
+  };
+
+  // Academic Sessions Management
+  const addAcademicSession = (session: AcademicSession) => {
+    setAcademicSessions(prev => [session, ...prev.filter(s => s.id !== session.id)]);
+  };
+
+  const updateAcademicSession = (id: string, updates: Partial<AcademicSession>) => {
+    setAcademicSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteAcademicSession = (id: string) => {
+    setAcademicSessions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const setCurrentAcademicSession = (id: string) => {
+    setAcademicSessions(prev => prev.map(s => ({ ...s, isCurrent: s.id === id })));
+  };
+
   // Profile
   const updateStudentProfile = (updated: Partial<StudentProfile>) => {
     setStudentProfile(prev => {
@@ -608,12 +1019,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Custom Classes
-  const addCustomClass = (cls: { level: string; name: string; subtitle: string }) => {
+  const addCustomClass = (cls: { level: string; name: string; subtitle: string; order?: number; isHidden?: boolean }) => {
     setCustomClasses(prev => [...prev.filter(c => c.level !== cls.level), cls]);
+  };
+
+  const updateCustomClass = (level: string, updates: Partial<{ level: string; name: string; subtitle: string; order?: number; isHidden?: boolean }>) => {
+    setCustomClasses(prev => prev.map(c => c.level === level ? { ...c, ...updates } : c));
   };
 
   const deleteCustomClass = (level: string) => {
     setCustomClasses(prev => prev.filter(c => c.level !== level));
+  };
+
+  const reorderClasses = (fromIndex: number, toIndex: number) => {
+    setCustomClasses(prev => {
+      const copy = [...prev];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
   };
 
   // Custom Subjects
@@ -621,8 +1045,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomSubjects(prev => [...prev.filter(s => s.id !== sub.id), sub]);
   };
 
+  const updateCustomSubject = (id: string, updates: Partial<SubjectInfo>) => {
+    setCustomSubjects(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
   const deleteCustomSubject = (id: string) => {
     setCustomSubjects(prev => prev.filter(s => s.id !== id));
+  };
+
+  const reorderSubjects = (fromIndex: number, toIndex: number) => {
+    setCustomSubjects(prev => {
+      const copy = [...prev];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
   };
 
   // Custom Chapters
@@ -630,8 +1067,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomChapters(prev => [...prev.filter(c => c.id !== ch.id), ch]);
   };
 
+  const updateCustomChapter = (id: string, updates: Partial<Chapter>) => {
+    setCustomChapters(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+  };
+
   const deleteCustomChapter = (id: string) => {
     setCustomChapters(prev => prev.filter(c => c.id !== id));
+  };
+
+  const reorderChapters = (fromIndex: number, toIndex: number) => {
+    setCustomChapters(prev => {
+      const copy = [...prev];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
+  };
+
+  // Dynamic Chapter-Wise Learning Resources (LMS)
+  const addLearningResource = (resourceData: Omit<LearningResource, 'id' | 'uploadedDate' | 'order'> & Partial<{ id: string; uploadedDate: string; order: number }>): LearningResource => {
+    const chapterResCount = learningResources.filter(r => r.chapterId === resourceData.chapterId).length;
+    const newResource: LearningResource = {
+      ...resourceData,
+      id: resourceData.id || `res-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      uploadedDate: resourceData.uploadedDate || new Date().toISOString().split('T')[0],
+      order: resourceData.order ?? (chapterResCount + 1),
+      published: resourceData.published ?? true
+    };
+    setLearningResources(prev => [...prev, newResource]);
+
+    addNotification({
+      title: `New Resource Added: ${newResource.title}`,
+      message: `Available under ${newResource.chapterTitle || 'Chapter'} for Class ${newResource.classLevel}.`,
+      category: 'chapter',
+      classLevel: newResource.classLevel,
+      linkTab: 'materials'
+    });
+
+    return newResource;
+  };
+
+  const updateLearningResource = (id: string, updates: Partial<LearningResource>) => {
+    setLearningResources(prev => prev.map(res => res.id === id ? { ...res, ...updates } : res));
+  };
+
+  const replaceResourceFile = (id: string, fileData: { fileName: string; fileSize?: string; fileUrl: string; pageCount?: number }) => {
+    setLearningResources(prev => prev.map(res => res.id === id ? {
+      ...res,
+      fileName: fileData.fileName,
+      fileSize: fileData.fileSize || res.fileSize,
+      fileUrl: fileData.fileUrl,
+      pageCount: fileData.pageCount || res.pageCount
+    } : res));
+  };
+
+  const reorderLearningResources = (chapterId: string, fromIndex: number, toIndex: number) => {
+    setLearningResources(prev => {
+      const chapterResources = prev.filter(r => r.chapterId === chapterId).sort((a, b) => a.order - b.order);
+      if (fromIndex < 0 || fromIndex >= chapterResources.length || toIndex < 0 || toIndex >= chapterResources.length) {
+        return prev;
+      }
+      const itemToMove = chapterResources[fromIndex];
+      const reordered = [...chapterResources];
+      reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, itemToMove);
+      const reorderedWithUpdatedOrder = reordered.map((item, idx) => ({ ...item, order: idx + 1 }));
+      const otherResources = prev.filter(r => r.chapterId !== chapterId);
+      return [...otherResources, ...reorderedWithUpdatedOrder];
+    });
+  };
+
+  const togglePublishLearningResource = (id: string) => {
+    setLearningResources(prev => prev.map(res => res.id === id ? { ...res, published: !res.published } : res));
+  };
+
+  const deleteLearningResource = (id: string) => {
+    setLearningResources(prev => prev.filter(res => res.id !== id));
+  };
+
+  const getResourcesForChapter = (chapterId: string, includeUnpublished: boolean = false): LearningResource[] => {
+    return learningResources
+      .filter(res => res.chapterId === chapterId && (includeUnpublished || res.published))
+      .sort((a, b) => a.order - b.order);
   };
 
   // Study Materials
@@ -657,6 +1174,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudyMaterials(prev => prev.filter(m => m.id !== id));
   };
 
+  const updateStudyMaterial = (id: string, updates: Partial<StudyMaterial>) => {
+    setStudyMaterials(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  const replaceStudyMaterial = (id: string, newFileData: Partial<StudyMaterial>) => {
+    setStudyMaterials(prev => prev.map(m => {
+      if (m.id === id) {
+        return {
+          ...m,
+          ...newFileData,
+          uploadedDate: new Date().toISOString().split('T')[0]
+        };
+      }
+      return m;
+    }));
+  };
+
   const togglePublishMaterial = (id: string) => {
     setStudyMaterials(prev => prev.map(m => m.id === id ? { ...m, published: !m.published } : m));
   };
@@ -669,6 +1203,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       published: true
     };
     setQuestionBank(prev => [newQ, ...prev]);
+  };
+
+  const updateQuestion = (id: string, updates: Partial<Question>) => {
+    setQuestionBank(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
   };
 
   const deleteQuestion = (id: string) => {
@@ -825,17 +1363,264 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPyqPapers(prev => prev.filter(p => p.id !== id));
   };
 
-  const syncAllCBSESkillMaterials = () => {
+  const updatePYQPaper = (id: string, updates: Partial<PYQPaper>) => {
+    setPyqPapers(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+  };
+
+  // Computer Lab Online Examination Handlers
+  const createLabExam = (exam: LabExamConfig) => {
+    setLabExams(prev => [exam, ...prev.filter(e => e.id !== exam.id)]);
+  };
+
+  const updateLabExam = (id: string, updates: Partial<LabExamConfig>) => {
+    setLabExams(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+  };
+
+  const deleteLabExam = (id: string) => {
+    setLabExams(prev => prev.filter(e => e.id !== id));
+  };
+
+  const duplicateLabExam = (id: string): LabExamConfig | null => {
+    const original = labExams.find(e => e.id === id);
+    if (!original) return null;
+    const newId = `exam-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const duplicated: LabExamConfig = {
+      ...original,
+      id: newId,
+      title: `${original.title} (Copy)`,
+      examCode: `${original.examCode}-COPY`,
+      status: 'draft',
+      createdAt: new Date().toISOString()
+    };
+    setLabExams(prev => [duplicated, ...prev]);
+    return duplicated;
+  };
+
+  const setLabExamStatus = (id: string, status: LabExamStatus) => {
+    setLabExams(prev => prev.map(e => e.id === id ? { ...e, status } : e));
+  };
+
+  const recordLabExamAnswer = (examId: string, studentId: string, questionId: string, answer: string | number, workstationIp?: string) => {
+    setLabExamSessions(prev => {
+      const existing = prev.find(s => s.examId === examId && s.studentId === studentId);
+      const now = new Date().toISOString();
+      if (existing) {
+        return prev.map(s => {
+          if (s.examId === examId && s.studentId === studentId) {
+            return {
+              ...s,
+              status: s.status === 'not_started' ? 'in_progress' : s.status,
+              workstationIp: workstationIp || s.workstationIp,
+              lastActiveAt: now,
+              answers: { ...s.answers, [questionId]: answer }
+            };
+          }
+          return s;
+        });
+      } else {
+        const student = registeredStudents.find(st => st.id === studentId || st.studentId === studentId);
+        const exam = labExams.find(e => e.id === examId);
+        const newSession: LabExamStudentSession = {
+          id: `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          examId,
+          studentId,
+          studentName: student?.name || 'Student',
+          rollNumber: student?.studentId,
+          classLevel: exam?.classLevel || 'X',
+          workstationIp: workstationIp || 'LAB-PC',
+          status: 'in_progress',
+          startedAt: now,
+          lastActiveAt: now,
+          answers: { [questionId]: answer },
+          autoScore: 0,
+          finalScore: 0,
+          totalMarks: exam?.totalMarks || 25,
+          percentage: 0,
+          passed: false,
+          isEvaluated: false
+        };
+        return [...prev, newSession];
+      }
+    });
+  };
+
+  const submitLabExam = (examId: string, studentId: string) => {
+    const exam = labExams.find(e => e.id === examId);
+    if (!exam) return;
+    const now = new Date().toISOString();
+
+    setLabExamSessions(prev => prev.map(s => {
+      if (s.examId === examId && s.studentId === studentId) {
+        let autoScore = 0;
+        exam.questions.forEach(q => {
+          const studentAns = s.answers[q.id];
+          if (studentAns !== undefined && studentAns !== null && studentAns !== '') {
+            if (q.type === 'mcq' || q.type === 'true_false') {
+              if (Number(studentAns) === Number(q.correctAnswer)) {
+                autoScore += q.marks;
+              }
+            } else if (q.type === 'fill_blank') {
+              if (String(studentAns).trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase()) {
+                autoScore += q.marks;
+              }
+            }
+          }
+        });
+
+        const totalMarks = exam.totalMarks;
+        const percentage = Math.round((autoScore / totalMarks) * 100);
+        const passed = autoScore >= exam.passingMarks;
+
+        return {
+          ...s,
+          status: 'submitted',
+          submittedAt: now,
+          autoScore,
+          finalScore: autoScore,
+          percentage,
+          passed,
+          isEvaluated: !exam.questions.some(q => q.type === 'short_answer' || q.type === 'long_answer' || q.type === 'practical_code')
+        };
+      }
+      return s;
+    }));
+  };
+
+  const evaluateLabExamSession = (
+    sessionId: string, 
+    manualEvaluations: Record<string, { marks: number; feedback?: string }>,
+    options?: { evaluatorName?: string; teacherFeedback?: string; resultsReleased?: boolean }
+  ) => {
+    const evaluator = options?.evaluatorName || 'Zakir Hussain (PGT Computer Science)';
+    const now = new Date().toISOString();
+
+    setLabExamSessions(prev => prev.map(s => {
+      if (s.id === sessionId) {
+        let manualScore = 0;
+        Object.values(manualEvaluations).forEach(ev => {
+          manualScore += (ev.marks || 0);
+        });
+        const finalScore = s.autoScore + manualScore;
+        const percentage = Math.round((finalScore / s.totalMarks) * 100);
+        const exam = labExams.find(e => e.id === s.examId);
+        const passed = exam ? finalScore >= exam.passingMarks : percentage >= 40;
+
+        const historyItem = {
+          evaluator,
+          evaluatedAt: now,
+          previousScore: s.finalScore,
+          newScore: finalScore,
+          changesNote: `Evaluated ${Object.keys(manualEvaluations).length} subjective questions (+${manualScore} marks). Total: ${finalScore}/${s.totalMarks}.`
+        };
+
+        return {
+          ...s,
+          manualEvaluations,
+          manualScore,
+          finalScore,
+          percentage,
+          passed,
+          isEvaluated: true,
+          evaluatedBy: evaluator,
+          evaluatedAt: now,
+          teacherFeedback: options?.teacherFeedback !== undefined ? options.teacherFeedback : s.teacherFeedback,
+          resultsReleased: options?.resultsReleased !== undefined ? options.resultsReleased : s.resultsReleased,
+          evaluationHistory: [...(s.evaluationHistory || []), historyItem]
+        };
+      }
+      return s;
+    }));
+
+    // Post to backend to persist to admin_store.json
+    try {
+      fetch('/api/lab-exams/session/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          manualEvaluations,
+          evaluatorName: evaluator,
+          teacherFeedback: options?.teacherFeedback,
+          resultsReleased: options?.resultsReleased
+        })
+      }).catch(err => console.warn('Backend eval sync warning:', err));
+    } catch {
+      // offline fallback
+    }
+  };
+
+  const releaseExamResults = (examId: string, showResultsImmediately: boolean, showAnswerKeysToStudents?: boolean) => {
+    setLabExams(prev => prev.map(e => {
+      if (e.id === examId) {
+        return {
+          ...e,
+          showResultsImmediately,
+          showAnswerKeysToStudents: showAnswerKeysToStudents !== undefined ? showAnswerKeysToStudents : e.showAnswerKeysToStudents
+        };
+      }
+      return e;
+    }));
+
+    // Also mark sessions of this exam with resultsReleased
+    setLabExamSessions(prev => prev.map(s => {
+      if (s.examId === examId) {
+        return { ...s, resultsReleased: showResultsImmediately };
+      }
+      return s;
+    }));
+
+    try {
+      fetch('/api/lab-exams/exam/release-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          examId,
+          showResultsImmediately,
+          showAnswerKeysToStudents
+        })
+      }).catch(() => {});
+    } catch {
+      // offline fallback
+    }
+  };
+
+  const reopenLabExamForStudent = (sessionId: string) => {
+    setLabExamSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'in_progress', submittedAt: undefined } : s));
+  };
+
+  const syncAllCurriculumMaterials = () => {
     localStorage.setItem('zakir_study_materials', JSON.stringify(SEED_STUDY_MATERIALS));
     localStorage.setItem('zakir_custom_chapters', JSON.stringify(CHAPTERS_DATA));
     setStudyMaterials(SEED_STUDY_MATERIALS);
     setCustomChapters(CHAPTERS_DATA);
     addNotification({
-      title: 'CBSE Skill Education Material Synchronized',
-      message: 'All Information Technology chapters and PDFs from cbseskilleducation.com have been updated.',
+      title: 'Curriculum Material Synchronized',
+      message: 'All Information Technology chapters and PDFs have been updated.',
       category: 'chapter',
       linkTab: 'materials'
     });
+  };
+
+  const syncStoreToBackend = async (data?: any) => {
+    try {
+      await fetch('/api/admin/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data || {
+          classes: customClasses,
+          subjects: customSubjects,
+          chapters: customChapters,
+          studyMaterials,
+          questionBank,
+          tests: labExams,
+          students: registeredStudents,
+          attempts: quizAttempts,
+          labSessions: labExamSessions
+        })
+      });
+    } catch {
+      // offline / local fallback
+    }
   };
 
   const resetAllData = () => {
@@ -876,6 +1661,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userRole,
         setUserRole,
         registeredStudents,
+        addStudentManually,
+        addStudentsBulk,
+        updateStudent,
+        deleteStudent,
+        toggleStudentLock,
+        setStudentPassword,
+        sendSupabaseResetEmail,
         isAuthModalOpen,
         authModalTab,
         authNoticeMessage,
@@ -890,27 +1682,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedClassFilter,
         selectedSubjectFilter,
         setSelectedSubjectFilter,
+        academicSessions,
+        addAcademicSession,
+        updateAcademicSession,
+        deleteAcademicSession,
+        setCurrentAcademicSession,
         customClasses,
         addCustomClass,
+        updateCustomClass,
         deleteCustomClass,
+        reorderClasses,
         customSubjects,
         addCustomSubject,
+        updateCustomSubject,
         deleteCustomSubject,
+        reorderSubjects,
         customChapters,
         addCustomChapter,
+        updateCustomChapter,
         deleteCustomChapter,
+        reorderChapters,
+        learningResources,
+        addLearningResource,
+        updateLearningResource,
+        replaceResourceFile,
+        reorderLearningResources,
+        togglePublishLearningResource,
+        deleteLearningResource,
+        getResourcesForChapter,
         studyMaterials,
         addStudyMaterial,
+        updateStudyMaterial,
+        replaceStudyMaterial,
         deleteStudyMaterial,
         togglePublishMaterial,
         questionBank,
         addQuestion,
+        updateQuestion,
         deleteQuestion,
         togglePublishQuestion,
         quizzes,
         createQuiz,
         deleteQuiz,
         togglePublishQuiz,
+        labExams,
+        createLabExam,
+        updateLabExam,
+        deleteLabExam,
+        duplicateLabExam,
+        setLabExamStatus,
+        labExamSessions,
+        recordLabExamAnswer,
+        submitLabExam,
+        evaluateLabExamSession,
+        reopenLabExamForStudent,
+        releaseExamResults,
         quizAttempts,
         recordQuizAttempt,
         toggleBookmark,
@@ -924,11 +1750,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         replyToDoubt,
         pyqPapers,
         addPYQPaper,
+        updatePYQPaper,
         deletePYQPaper,
         notifications,
         markNotificationRead,
         addNotification,
-        syncAllCBSESkillMaterials,
+        syncAllCurriculumMaterials,
+        syncStoreToBackend,
         resetAllData
       }}
     >

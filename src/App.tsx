@@ -19,11 +19,9 @@ import { AdminPanelView } from './components/views/AdminPanelView';
 import { AboutView } from './components/views/AboutView';
 import { ContactView } from './components/views/ContactView';
 import { StudyRoomView } from './components/views/StudyRoomView';
-import { PracticalLabView } from './components/views/PracticalLabView';
-import { BlueprintView } from './components/views/BlueprintView';
-import { CompetencyQuestionsView } from './components/views/CompetencyQuestionsView';
-import { FlashcardsView } from './components/views/FlashcardsView';
-import { PYQArchiveView } from './components/views/PYQArchiveView';
+import { ChapterLmsView } from './components/views/ChapterLmsView';
+import { LabExamPortalView } from './components/views/LabExamPortalView';
+import { StudentLoginView } from './components/views/StudentLoginView';
 import { StudyMaterial, QuizConfig, QuizAttempt, ClassLevel, SubjectId } from './types';
 import { Lock, LogIn, GraduationCap, LayoutDashboard, ShieldAlert } from 'lucide-react';
 
@@ -36,10 +34,11 @@ const MainLayout: React.FC = () => {
     activeCertificateAttempt, 
     setActiveCertificateAttempt, 
     quizzes, 
+    selectedClassFilter,
     setSelectedClassFilter 
   } = useApp();
 
-  const [currentTab, setCurrentTab] = useState<string>('home');
+  const [currentTab, setCurrentTab] = useState<string>('lms');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [materialToOpenInReader, setMaterialToOpenInReader] = useState<StudyMaterial | null>(null);
   const [quizToStartDirectly, setQuizToStartDirectly] = useState<QuizConfig | null>(null);
@@ -98,8 +97,8 @@ const MainLayout: React.FC = () => {
 
       {/* Main View Router */}
       <main className="flex-1">
-        {/* Student Content Access Protection Guard */}
-        {!isAuthenticated && ['materials', 'quiz', 'qbank', 'lab', 'blueprint', 'competency', 'flashcards', 'pyq', 'studyroom'].includes(currentTab) ? (
+        {/* Protected Feature Guard (For specialized private rooms/tests) */}
+        {!isAuthenticated && ['mytests', 'studyroom'].includes(currentTab) ? (
           <div className="max-w-3xl mx-auto px-4 py-16 sm:py-24 text-center">
             <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200 shadow-xs">
@@ -152,6 +151,20 @@ const MainLayout: React.FC = () => {
           </div>
         ) : (
           <>
+            {currentTab === 'student-login' && (
+              <StudentLoginView
+                onBackHome={() => {
+                  setCurrentTab('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onLoginSuccess={() => {
+                  setCurrentTab('dashboard');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onSwitchToAdmin={() => openAuthModal('admin', 'Sign in with Administrator Credentials (zakhu1099@gmail.com)')}
+              />
+            )}
+
             {currentTab === 'home' && (
               <HomeView
                 setCurrentTab={tab => {
@@ -163,11 +176,26 @@ const MainLayout: React.FC = () => {
               />
             )}
 
-            {currentTab === 'materials' && (
-              <StudyMaterialView
-                initialMaterialToOpen={materialToOpenInReader}
-                onClearInitialMaterial={() => setMaterialToOpenInReader(null)}
-                onStartQuizWithChapter={handleStartQuizWithChapter}
+            {(currentTab === 'lms' || currentTab === 'materials') && (
+              <ChapterLmsView
+                initialClass={selectedClassFilter !== 'ALL' ? selectedClassFilter : 'X'}
+                onNavigateHome={() => {
+                  setCurrentTab('home');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            )}
+
+            {currentTab === 'examhall' && (
+              <LabExamPortalView
+                onBackToDashboard={() => {
+                  setCurrentTab('dashboard');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onOpenAdminPanel={() => {
+                  setCurrentTab('admin');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
             )}
 
@@ -212,15 +240,9 @@ const MainLayout: React.FC = () => {
 
             {currentTab === 'qbank' && <QuestionBankView onStartQuiz={handleStartQuiz} />}
 
-            {currentTab === 'lab' && <PracticalLabView />}
+            {currentTab === 'about' && <AboutView setCurrentTab={setCurrentTab} />}
 
-            {currentTab === 'blueprint' && <BlueprintView />}
-
-            {currentTab === 'competency' && <CompetencyQuestionsView />}
-
-            {currentTab === 'flashcards' && <FlashcardsView />}
-
-            {currentTab === 'pyq' && <PYQArchiveView />}
+            {currentTab === 'contact' && <ContactView />}
 
             {currentTab === 'admin' && (
               userRole === 'admin' ? (

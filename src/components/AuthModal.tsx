@@ -26,7 +26,9 @@ export const AuthModal: React.FC = () => {
     openAuthModal, 
     authNoticeMessage, 
     login, 
-    register 
+    register,
+    setStudentPassword,
+    sendSupabaseResetEmail
   } = useApp();
 
   // Login Form
@@ -46,10 +48,15 @@ export const AuthModal: React.FC = () => {
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
 
+  // Password Setup / Reset Form
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [resetSuccessMsg, setResetSuccessMsg] = useState('');
+
   // Status & Error
   const [errorMessage, setErrorMessage] = useState('');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [isSendingResetLink, setIsSendingResetLink] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
@@ -195,44 +202,46 @@ export const AuthModal: React.FC = () => {
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-6">
 
-          {/* 1. FORGOT PASSWORD FLOW */}
+          {/* 1. FORGOT PASSWORD / EMAIL RESET LINK VIA SUPABASE AUTH / DIRECT CREATION */}
           {isForgotPassword ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Reset Password 🔑</h2>
+                <h2 className="text-xl font-bold text-slate-900">Forgot / Set Student Password 🔑</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Enter your registered student email or student ID to receive instructions.
+                  Send a secure password reset link to your registered email via Supabase Auth, or set your password directly below.
                 </p>
               </div>
 
-              {resetSent ? (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-2 text-xs">
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {resetSuccessMsg ? (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-3 text-xs">
                   <div className="flex items-center gap-2 font-bold text-emerald-900">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Password Reset Link Sent!</span>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>Success!</span>
                   </div>
-                  <p>Check your email for instructions to reset your password.</p>
+                  <p className="leading-relaxed">{resetSuccessMsg}</p>
                   <button
                     onClick={() => {
                       setIsForgotPassword(false);
-                      setResetSent(false);
+                      setResetSuccessMsg('');
+                      setErrorMessage('');
                     }}
-                    className="mt-2 text-xs font-bold text-blue-600 underline cursor-pointer"
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
                   >
-                    Back to Login
+                    Back to Student Sign In
                   </button>
                 </div>
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setResetSent(true);
-                  }}
-                  className="space-y-4"
-                >
+                <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email or Student ID
+                      Registered Email or Student ID
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -241,28 +250,116 @@ export const AuthModal: React.FC = () => {
                         required
                         value={loginEmailOrId}
                         onChange={(e) => setLoginEmailOrId(e.target.value)}
-                        placeholder="e.g. yourname@email.com or Student ID"
+                        placeholder="e.g. rahul@school.com or STD-X-1024"
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-                    >
-                      Send Reset Instructions
-                    </button>
+                  {/* Option 1: Send Secure Email Reset Link via Supabase Auth */}
+                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                        <Mail className="w-4 h-4 text-blue-600" />
+                        <span>Supabase Auth Email Reset Link</span>
+                      </span>
+                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Secure Link</span>
+                    </div>
+                    <p className="text-[11px] text-blue-800/80">
+                      Dispatches an official password reset link directly to the student&apos;s email address via Supabase Auth.
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setIsForgotPassword(false)}
-                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                      disabled={isSendingResetLink}
+                      onClick={async () => {
+                        setErrorMessage('');
+                        if (!loginEmailOrId.trim()) {
+                          setErrorMessage('Please enter your registered Email address or Student ID.');
+                          return;
+                        }
+                        setIsSendingResetLink(true);
+                        const res = await sendSupabaseResetEmail(loginEmailOrId);
+                        setIsSendingResetLink(false);
+                        if (res.success) {
+                          setResetSuccessMsg(res.message);
+                        } else {
+                          setErrorMessage(res.message);
+                        }
+                      }}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      Cancel
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{isSendingResetLink ? 'Sending Reset Link...' : 'Send Secure Email Reset Link'}</span>
                     </button>
                   </div>
-                </form>
+
+                  <div className="relative flex items-center justify-center my-2">
+                    <div className="border-t border-slate-200 w-full"></div>
+                    <span className="bg-white px-2 text-[10px] text-slate-400 font-bold uppercase shrink-0">or set password directly</span>
+                    <div className="border-t border-slate-200 w-full"></div>
+                  </div>
+
+                  {/* Option 2: Direct Password Creation */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setErrorMessage('');
+                      if (!loginEmailOrId.trim()) {
+                        setErrorMessage('Please enter your registered Email or Student ID.');
+                        return;
+                      }
+                      if (!newPasswordInput.trim() || newPasswordInput.trim().length < 3) {
+                        setErrorMessage('Please enter a new password (at least 3 characters).');
+                        return;
+                      }
+
+                      const res = setStudentPassword(loginEmailOrId, newPasswordInput);
+                      if (res.success) {
+                        setResetSuccessMsg(res.message);
+                        setLoginPassword(newPasswordInput);
+                      } else {
+                        setErrorMessage(res.message);
+                      }
+                    }}
+                    className="space-y-3"
+                  >
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        New Password (Instant Setup)
+                      </label>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                        <input
+                          type="password"
+                          value={newPasswordInput}
+                          onChange={(e) => setNewPasswordInput(e.target.value)}
+                          placeholder="Enter new password"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="submit"
+                        className="flex-1 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <KeyRound className="w-4 h-4 text-emerald-400" />
+                        <span>Save Password Directly</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsForgotPassword(false);
+                          setErrorMessage('');
+                        }}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
               )}
             </div>
           ) : authModalTab === 'admin' ? (
@@ -357,7 +454,7 @@ export const AuthModal: React.FC = () => {
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Email / Student ID
+                    Username, Email, or Roll No
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -366,7 +463,7 @@ export const AuthModal: React.FC = () => {
                       required
                       value={loginEmailOrId}
                       onChange={(e) => setLoginEmailOrId(e.target.value)}
-                      placeholder="e.g. yourname@email.com or Student ID"
+                      placeholder="e.g. rahul_x, rahul@school.com, or Roll 1024"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
                   </div>
@@ -382,7 +479,7 @@ export const AuthModal: React.FC = () => {
                       onClick={() => setIsForgotPassword(true)}
                       className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
                     >
-                      Forgot Password?
+                      First-Time Login / Set Password?
                     </button>
                   </div>
                   <div className="relative">

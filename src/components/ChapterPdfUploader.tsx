@@ -19,6 +19,7 @@ import { useApp } from '../context/AppContext';
 import { ClassLevel, SubjectId, MaterialType, StudyMaterial } from '../types';
 import { CLASSES_LIST, getSubjectsForClass, getChapters } from '../data/curriculumData';
 import { downloadChapterPDF } from '../lib/pdfGenerator';
+import { savePdfChapterToSupabase } from '../lib/supabase';
 
 interface ChapterPdfUploaderProps {
   onSuccess?: (material: StudyMaterial) => void;
@@ -40,7 +41,7 @@ export const ChapterPdfUploader: React.FC<ChapterPdfUploaderProps> = ({
     customClasses, 
     customSubjects, 
     customChapters,
-    syncAllCBSESkillMaterials,
+    syncAllCurriculumMaterials,
     studyMaterials
   } = useApp();
 
@@ -57,7 +58,7 @@ export const ChapterPdfUploader: React.FC<ChapterPdfUploaderProps> = ({
   const [materialTitle, setMaterialTitle] = useState<string>('');
   const [materialType, setMaterialType] = useState<MaterialType>('notes');
   const [description, setDescription] = useState<string>('');
-  const [tags, setTags] = useState<string>('CBSE Skill Education, IT 402, Chapter PDF');
+  const [tags, setTags] = useState<string>('IT 402, Chapter PDF, Study Material');
   
   const [isUploading, setIsUploading] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -105,7 +106,7 @@ export const ChapterPdfUploader: React.FC<ChapterPdfUploaderProps> = ({
     // Auto-detect information from filename
     const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
     setMaterialTitle(cleanName);
-    setDescription(`Official chapter PDF study material uploaded from CBSE Skill Education: ${cleanName}.`);
+    setDescription(`Official chapter PDF study material: ${cleanName}.`);
 
     // Intelligent Class detection
     const nameLower = file.name.toLowerCase();
@@ -134,6 +135,11 @@ export const ChapterPdfUploader: React.FC<ChapterPdfUploaderProps> = ({
       setSubjectId('typo-817');
     } else {
       setSubjectId('it-402');
+    }
+
+    // Intelligent Category detection
+    if (nameLower.includes('pyq') || nameLower.includes('previous year') || nameLower.includes('question paper') || nameLower.includes('board paper') || nameLower.includes('sample paper')) {
+      setMaterialType('previous_year_paper');
     }
 
     // Convert file to Base64 Data URL for persistent in-browser storage and immediate download
@@ -182,8 +188,7 @@ export const ChapterPdfUploader: React.FC<ChapterPdfUploaderProps> = ({
 
       // Generate rich markdown summary for reader view alongside attached PDF
       const defaultContent = `# ${materialTitle}
-*Source: cbseskilleducation.com/information-technology*
-*Curriculum: CBSE Class ${classLevel} • ${subjectId.toUpperCase()} • ${chTitleToUse}*
+*Curriculum: Class ${classLevel} • ${subjectId.toUpperCase()} • ${chTitleToUse}*
 *Uploaded via Zakir Learning Hub Portal*
 
 ---
@@ -196,7 +201,6 @@ This official chapter document has been uploaded as a PDF file directly to your 
 - **Class Level:** Class ${classLevel}
 - **Subject:** ${subjectId.toUpperCase()}
 - **Chapter / Unit:** ${chTitleToUse}
-- **Source Link:** https://cbseskilleducation.com/information-technology
 
 ### Quick Actions:
 Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to inspect or print the complete document.`;
@@ -208,14 +212,13 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
         chapterTitle: chTitleToUse,
         title: materialTitle,
         type: materialType,
-        description: description || `Official CBSE Skill Education Chapter PDF: ${materialTitle}`,
+        description: description || `Official Chapter PDF: ${materialTitle}`,
         readTimeMinutes: Math.max(5, Math.min(30, Math.round(selectedFile.size / 60000))),
-        author: 'Mr. Zakir Hussain • CBSE Skill Education',
+        author: 'Mr. Zakir Hussain',
         content: defaultContent,
         downloadableFileName: selectedFile.name,
         pdfDataUrl: pdfDataUrl || undefined,
         fileSize: fileSizeStr,
-        sourceUrl: 'https://cbseskilleducation.com/information-technology',
         curriculumPart: chTitleToUse.toLowerCase().includes('skills') ? 'Part A: Employability Skills' : 'Part B: Subject Specific Skills',
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         published: true
@@ -223,6 +226,18 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
 
       addStudyMaterial(newMaterial);
       
+      // Save chapter PDF to Supabase live
+      savePdfChapterToSupabase({
+        id: `pdf-ch-${Date.now()}`,
+        fileName: selectedFile.name,
+        classLevel,
+        subjectId,
+        chapterTitle: chTitleToUse,
+        questionCount: 0,
+        extractedQuestions: [],
+        pdfDataUrl: pdfDataUrl || undefined
+      });
+
       setSuccessToast(`Successfully uploaded "${selectedFile.name}" to Class ${classLevel} (${chTitleToUse})!`);
       setSelectedFile(null);
       setPdfDataUrl('');
@@ -246,38 +261,27 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-200/60">
             <Sparkles className="w-3.5 h-3.5" />
-            CBSE Skill Education • IT Chapter Uploader
+            Information Technology • Chapter PDF Uploader
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <Upload className="w-6 h-6 text-blue-600" />
             Drag & Drop Chapter PDF Upload
           </h2>
-          <p className="text-sm text-slate-500 max-w-2xl">
-            Upload chapter-wise PDF notes and documents directly from{' '}
-            <a 
-              href="https://cbseskilleducation.com/information-technology" 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-blue-600 font-semibold underline hover:text-blue-800"
-            >
-              cbseskilleducation.com/information-technology
-            </a>
-            . Students will be able to read, annotate, and download each chapter as a PDF.
-          </p>
+
         </div>
 
         {/* Sync Button */}
         <button
           type="button"
           onClick={() => {
-            syncAllCBSESkillMaterials();
-            setSuccessToast('All official CBSE Skill Education IT chapters (PDFs & Notes) synchronized successfully!');
+            syncAllCurriculumMaterials();
+            setSuccessToast('All official IT chapters (PDFs & Notes) synchronized successfully!');
           }}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-sm active:scale-95 shrink-0"
-          title="Import or restore all pre-loaded chapters from cbseskilleducation.com"
+          title="Import or restore all pre-loaded chapters"
         >
           <RefreshCw className="w-4 h-4 text-blue-400" />
-          Sync All CBSE IT Chapters
+          Sync All IT Chapters
         </button>
       </div>
 
@@ -367,7 +371,7 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
                 or <span className="text-blue-600 font-semibold underline">browse from your computer</span>
               </p>
               <p className="text-xs text-slate-400">
-                Supports official CBSE Skill Education PDF notes, sample question files, and unit summaries
+                Supports official PDF notes, sample question files, and unit summaries
               </p>
             </div>
           </div>
@@ -464,6 +468,7 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="notes">Complete Chapter Notes (PDF)</option>
+                <option value="previous_year_paper">Previous Year Question Paper (PYQ / Board Exam)</option>
                 <option value="important_questions">Important CBSE Board Questions & Answers</option>
                 <option value="practical_file">Practical Lab Manual & Solutions</option>
                 <option value="cheat_sheet">Quick Revision Cheat Sheet</option>
@@ -529,7 +534,7 @@ Click the **"Download Chapter PDF"** or **"View PDF Document"** button above to 
             </h4>
           </div>
           <span className="text-xs text-slate-400 font-medium">
-            Curated from cbseskilleducation.com
+            Curated Chapter Study Material
           </span>
         </div>
 

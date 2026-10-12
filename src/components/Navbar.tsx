@@ -17,13 +17,10 @@ import {
   LogIn,
   LogOut,
   Award,
-  BarChart3,
   Flame,
   LayoutDashboard,
-  Terminal,
-  FileCheck2,
-  Zap,
-  FileText
+  ExternalLink,
+  Monitor
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useApp } from '../context/AppContext';
@@ -53,95 +50,38 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [classesDropdownOpen, setClassesDropdownOpen] = useState(false);
-  const [boardHubDropdownOpen, setBoardHubDropdownOpen] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  const BOARD_HUB_ITEMS = [
-    {
-      id: 'lab',
-      label: 'Practical Lab (SQL • Pandas • Typing)',
-      desc: 'Interactive In-browser SQL playground & touch typing test',
-      icon: Terminal,
-      badge: 'Interactive'
-    },
-    {
-      id: 'blueprint',
-      label: 'CBSE Blueprint & Weightage',
-      desc: 'Unit-wise marks, Part A/B/C and high-yield chapters',
-      icon: BarChart3,
-      badge: 'Board 2026'
-    },
-    {
-      id: 'competency',
-      label: 'Competency & Case Studies',
-      desc: 'Assertion-Reasoning & scenario-based case questions',
-      icon: FileCheck2,
-      badge: '50% Pattern'
-    },
-    {
-      id: 'flashcards',
-      label: 'Flashcards & 60-Sec Cheats',
-      desc: 'Quick flip cards & 1-page exam morning cheat sheets',
-      icon: Zap,
-      badge: 'Revision'
-    },
-    {
-      id: 'pyq',
-      label: 'PYQ Archive & Step Marking',
-      desc: 'Past 5 years CBSE board papers with official model keys',
-      icon: FileText,
-      badge: 'Official'
-    },
-    {
-      id: 'qbank',
-      label: 'AI PDF to MCQ Extractor',
-      desc: 'Upload notes or past papers to extract MCQs with Gemini',
-      icon: Sparkles,
-      badge: 'Gemini AI'
-    }
-  ];
-
   // Dynamic Navigation Links based on Role & Auth
   const getNavLinks = () => {
     if (userRole === 'admin') {
       return [
-        { id: 'admin', label: 'Admin CMS', icon: ShieldCheck },
-        { id: 'lab', label: 'Practical Lab' },
-        { id: 'boardHub', label: 'Exam Hub', isDropdown: true },
-        { id: 'materials', label: 'Study Material' },
-        { id: 'quiz', label: 'Quizzes' },
-        { id: 'qbank', label: 'Question Bank' },
-        { id: 'home', label: 'Public View' }
+        { id: 'admin', label: 'Admin Dashboard', icon: ShieldCheck },
+        { id: 'lms', label: 'Chapter LMS', icon: BookOpen },
+        { id: 'examhall', label: 'Lab Exam Hall', icon: Monitor },
+        { id: 'home', label: 'Public Website' }
       ];
     }
 
     if (isAuthenticated) {
-      // Student Logged-In Navigation
       return [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'lms', label: 'Chapter LMS', icon: BookOpen },
+        { id: 'examhall', label: 'Online Lab Exam', icon: Monitor },
         { id: 'classes', label: 'Classes', isDropdown: true },
-        { id: 'lab', label: 'Practical Lab' },
-        { id: 'boardHub', label: 'Exam Hub', isDropdown: true },
-        { id: 'materials', label: 'Study Material' },
-        { id: 'quiz', label: 'Quizzes' },
-        { id: 'mytests', label: 'My Tests' },
-        { id: 'studyroom', label: 'Study Rooms' }
+        { id: 'dashboard', label: 'My Progress', icon: LayoutDashboard }
       ];
     }
 
-    // Public / Guest Navigation
     return [
-      { id: 'home', label: 'Home' },
+      { id: 'lms', label: 'Chapter LMS', icon: BookOpen },
+      { id: 'examhall', label: 'Online Lab Exam', icon: Monitor },
+      { id: 'student-login', label: 'Student Portal', icon: GraduationCap },
       { id: 'classes', label: 'Classes', isDropdown: true },
-      { id: 'lab', label: 'Practical Lab' },
-      { id: 'boardHub', label: 'Exam Hub', isDropdown: true },
-      { id: 'materials', label: 'Study Material' },
-      { id: 'quiz', label: 'Quizzes' },
-      { id: 'qbank', label: 'Question Bank' },
-      { id: 'about', label: 'About' }
+      { id: 'home', label: 'Home' },
+      { id: 'about', label: 'About Hub' }
     ];
   };
 
@@ -165,8 +105,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
         const el = document.getElementById('student-tests-history');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    } else if (id === 'boardHub') {
-      setCurrentTab('lab');
     } else {
       setCurrentTab(id);
     }
@@ -174,20 +112,27 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs transition-all">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-17 gap-3 sm:gap-6">
           
-          {/* 1. Brand Logo */}
+          {/* 1. Professional Brand Identity */}
           <div 
             onClick={() => setCurrentTab(isAuthenticated ? 'dashboard' : 'home')}
             className="flex items-center gap-3 cursor-pointer group shrink-0"
           >
-            <Logo className="w-10 h-10 group-hover:scale-105 transition-transform drop-shadow-xs" />
+            <div className="relative">
+              <Logo className="w-10 h-10 group-hover:scale-105 transition-transform drop-shadow-xs" />
+            </div>
             <div className="leading-tight">
-              <span className="text-lg font-extrabold tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors block">
-                Zakir Learning Hub
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[17px] font-black tracking-tight text-slate-900 group-hover:text-teal-700 transition-colors font-heading">
+                  Learn with Zakir
+                </span>
+                <span className="hidden xl:inline-block px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200/80 rounded">
+                  CBSE
+                </span>
+              </div>
               <span className="text-[11px] text-slate-500 font-medium hidden sm:block">
                 Computer Science • IT • IP • Typography
               </span>
@@ -203,141 +148,63 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                 return (
                   <div key={link.id} className="relative">
                     <button
-                      onClick={() => {
-                        setClassesDropdownOpen(!classesDropdownOpen);
-                        setBoardHubDropdownOpen(false);
-                      }}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      type="button"
+                      onClick={() => setClassesDropdownOpen(!classesDropdownOpen)}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all cursor-pointer ${
                         selectedClassFilter !== 'ALL'
-                          ? 'bg-blue-50 text-blue-700 font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                          ? 'bg-teal-50 text-teal-800 font-bold border border-teal-200/80'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                       }`}
                     >
                       <span>{selectedClassFilter !== 'ALL' ? `Class ${selectedClassFilter}` : link.label}</span>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${classesDropdownOpen ? 'rotate-180 text-teal-600' : 'text-slate-400'}`} />
                     </button>
 
                     {/* Classes Dropdown Menu */}
                     {classesDropdownOpen && (
                       <div 
                         onMouseLeave={() => setClassesDropdownOpen(false)}
-                        className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95 duration-150"
+                        className="absolute left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 py-3 z-50 animate-in fade-in zoom-in-95 duration-150"
                       >
                         <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Select Class Level</span>
                           <button 
+                            type="button"
                             onClick={() => {
                               setSelectedClassFilter('ALL');
                               setClassesDropdownOpen(false);
                             }}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold"
+                            className="text-[11px] text-teal-600 hover:underline font-semibold cursor-pointer"
                           >
-                            Reset
+                            All Classes (Reset)
                           </button>
                         </div>
 
-                        <div className="p-2 grid grid-cols-1 gap-1">
+                        <div className="p-2 space-y-1 max-h-80 overflow-y-auto">
                           {CLASSES_LIST.map(cls => (
                             <button
                               key={cls.level}
+                              type="button"
                               onClick={() => {
                                 setSelectedClassFilter(cls.level as ClassLevel);
                                 setClassesDropdownOpen(false);
-                                setCurrentTab('materials');
+                                setCurrentTab('lms');
                               }}
-                              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-left transition-colors cursor-pointer ${
+                              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs text-left transition-colors cursor-pointer ${
                                 selectedClassFilter === cls.level
-                                  ? 'bg-blue-600 text-white font-bold'
-                                  : 'hover:bg-slate-100 text-slate-700'
+                                  ? 'bg-teal-700 text-white font-bold shadow-xs'
+                                  : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
                               <div>
-                                <span className="font-bold">{cls.name}</span>
-                                <p className={`text-[10px] ${selectedClassFilter === cls.level ? 'text-blue-100' : 'text-slate-400'}`}>
+                                <span className="font-bold text-sm">{cls.name}</span>
+                                <p className={`text-[10px] ${selectedClassFilter === cls.level ? 'text-teal-100' : 'text-slate-400'}`}>
                                   {cls.subtitle}
                                 </p>
                               </div>
-                              {selectedClassFilter === cls.level && <Check className="w-4 h-4" />}
+                              {selectedClassFilter === cls.level && <Check className="w-4 h-4 text-white" />}
                             </button>
                           ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (link.id === 'boardHub') {
-                const isHubActive = ['lab', 'blueprint', 'competency', 'flashcards', 'pyq'].includes(currentTab);
-                return (
-                  <div key={link.id} className="relative">
-                    <button
-                      onClick={() => {
-                        setBoardHubDropdownOpen(!boardHubDropdownOpen);
-                        setClassesDropdownOpen(false);
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        isHubActive
-                          ? 'bg-blue-50 text-blue-700 font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Exam Hub</span>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-
-                    {boardHubDropdownOpen && (
-                      <div
-                        onMouseLeave={() => setBoardHubDropdownOpen(false)}
-                        className="absolute left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95 duration-150"
-                      >
-                        <div className="px-4 py-2 border-b border-slate-100">
-                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            CBSE Board Labs & Tools
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Practical playgrounds, blueprints & past papers
-                          </p>
-                        </div>
-
-                        <div className="p-2 space-y-1">
-                          {BOARD_HUB_ITEMS.map(item => {
-                            const Icon = item.icon;
-                            const isItemActive = currentTab === item.id;
-                            return (
-                              <button
-                                key={item.id}
-                                onClick={() => {
-                                  setCurrentTab(item.id);
-                                  setBoardHubDropdownOpen(false);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className={`w-full flex items-start gap-3 p-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                                  isItemActive
-                                    ? 'bg-blue-50 border border-blue-200 text-blue-900'
-                                    : 'hover:bg-slate-50 text-slate-800'
-                                }`}
-                              >
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                                  isItemActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
-                                }`}>
-                                  <Icon className="w-4 h-4" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-1">
-                                    <span className="text-xs font-bold truncate">{item.label}</span>
-                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 shrink-0">
-                                      {item.badge}
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
-                                    {item.desc}
-                                  </p>
-                                </div>
-                              </button>
-                            );
-                          })}
                         </div>
                       </div>
                     )}
@@ -348,11 +215,12 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
               return (
                 <button
                   key={link.id}
+                  type="button"
                   onClick={() => handleNavClick(link.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-[13px] font-semibold transition-all cursor-pointer ${
                     isActive 
-                      ? 'bg-blue-600 text-white shadow-xs' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      ? 'bg-slate-900 text-white shadow-xs' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                   }`}
                 >
                   {link.label}
@@ -362,32 +230,34 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
           </nav>
 
           {/* 3. Action Zone */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             
-            {/* Search Button */}
+            {/* Search Trigger */}
             <button
+              type="button"
               onClick={onSearchClick}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-medium border border-slate-200/70 transition-all cursor-pointer"
-              title="Search materials & MCQs (Ctrl+K)"
+              className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-medium border border-slate-200/80 transition-all cursor-pointer group"
+              title="Search materials, PYQs & MCQs (Ctrl+K)"
             >
-              <Search className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="hidden md:inline-block px-1.5 py-0.2 text-[10px] font-mono text-slate-500 bg-white border border-slate-200 rounded shadow-xs">
+              <Search className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-600 transition-colors" />
+              <span className="hidden md:inline text-slate-600">Search Hub...</span>
+              <kbd className="hidden lg:inline-block px-1.5 py-0.2 text-[10px] font-mono text-slate-500 bg-white border border-slate-200 rounded shadow-xs">
                 ⌘K
               </kbd>
             </button>
 
-            {/* Notification Bell */}
+            {/* Notification Center */}
             {isAuthenticated && (
               <div className="relative">
                 <button
+                  type="button"
                   onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                  className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors relative cursor-pointer"
+                  className="p-2 sm:p-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors relative cursor-pointer"
                   title="Notifications"
                 >
                   <Bell className="w-4 h-4" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white animate-pulse" />
                   )}
                 </button>
 
@@ -399,7 +269,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                     <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-900">Notifications</span>
                       {unreadCount > 0 && (
-                        <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[10px] font-bold rounded">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-full">
                           {unreadCount} new
                         </span>
                       )}
@@ -409,7 +279,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                       {notifications.length === 0 ? (
                         <div className="py-6 px-4 text-center text-slate-400 space-y-1">
                           <p className="text-xs font-medium text-slate-600">No notifications yet</p>
-                          <p className="text-[11px] text-slate-400">You're all caught up with portal updates.</p>
+                          <p className="text-[11px] text-slate-400">You are all caught up with portal updates.</p>
                         </div>
                       ) : (
                         notifications.map(n => (
@@ -426,7 +296,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                           >
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-slate-900">{n.title}</span>
-                              {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
+                              {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
                             </div>
                             <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">{n.message}</p>
                           </div>
@@ -438,12 +308,13 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
               </div>
             )}
 
-            {/* Authentication Buttons & User Dropdown */}
+            {/* User Profile / Authentication Menu */}
             {isAuthenticated ? (
               <div className="relative">
                 <button
+                  type="button"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center gap-2 pl-2 pr-3 py-1 bg-blue-50 hover:bg-blue-100/80 border border-blue-200/80 rounded-full transition-colors cursor-pointer"
+                  className="flex items-center gap-2 pl-2 pr-3 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 rounded-full transition-all cursor-pointer shadow-xs"
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
                     {currentUser?.name.charAt(0) || 'S'}
@@ -462,24 +333,30 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                 {profileDropdownOpen && (
                   <div 
                     onMouseLeave={() => setProfileDropdownOpen(false)}
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                    className="absolute right-0 mt-2 w-68 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
                   >
                     <div className="px-4 py-3 border-b border-slate-100">
                       <p className="text-xs font-bold text-slate-900">{currentUser?.name}</p>
-                      <p className="text-[11px] text-slate-500">{currentUser?.email}</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[10px] font-bold">
-                        ID: {currentUser?.studentId || 'X1024'}
-                      </span>
+                      <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/60 rounded text-[10px] font-bold">
+                          ID: {currentUser?.studentId || 'X1024'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold">
+                          Class {currentUser?.classLevel || studentProfile.classLevel}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="p-1 space-y-0.5">
+                    <div className="p-1.5 space-y-0.5">
                       {currentUser?.role === 'admin' ? (
                         <button
+                          type="button"
                           onClick={() => {
                             setCurrentTab('admin');
                             setProfileDropdownOpen(false);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                         >
                           <ShieldCheck className="w-4 h-4 text-purple-600" />
                           <span>Admin Control Center</span>
@@ -487,21 +364,23 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                       ) : (
                         <>
                           <button
+                            type="button"
                             onClick={() => {
                               setCurrentTab('dashboard');
                               setProfileDropdownOpen(false);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                           >
                             <LayoutDashboard className="w-4 h-4 text-blue-600" />
                             <span>Student Dashboard</span>
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               handleNavClick('mytests');
                               setProfileDropdownOpen(false);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                           >
                             <Award className="w-4 h-4 text-amber-600" />
                             <span>My Tests & Certificates</span>
@@ -511,6 +390,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
 
                       {currentUser?.role === 'admin' && (
                         <button
+                          type="button"
                           onClick={() => {
                             if (userRole === 'student') {
                               setUserRole('admin');
@@ -521,7 +401,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
                             }
                             setProfileDropdownOpen(false);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-purple-700 hover:bg-purple-50"
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-purple-700 hover:bg-purple-50 cursor-pointer"
                         >
                           <ShieldCheck className="w-4 h-4 text-purple-600" />
                           <span>Switch to {userRole === 'admin' ? 'Student View' : 'Teacher View'}</span>
@@ -530,15 +410,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
 
                       <div className="pt-1 border-t border-slate-100">
                         <button
+                          type="button"
                           onClick={() => {
                             logout();
                             setProfileDropdownOpen(false);
                             setCurrentTab('home');
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
                         >
                           <LogOut className="w-4 h-4" />
-                          <span>Logout</span>
+                          <span>Sign Out</span>
                         </button>
                       </div>
                     </div>
@@ -548,25 +429,37 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
             ) : (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => openAuthModal('login')}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => setCurrentTab('student-login')}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all cursor-pointer"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Login</span>
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>Student Login</span>
                 </button>
                 <button
-                  onClick={() => openAuthModal('register')}
-                  className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => openAuthModal('login')}
+                  className="px-3 py-1.5 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 text-xs font-semibold transition-all cursor-pointer"
                 >
-                  <span>Register</span>
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('register')}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow-sm transition-all cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Register Free</span>
                 </button>
               </div>
             )}
 
             {/* Mobile Menu Trigger */}
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -574,17 +467,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
         </div>
       </div>
 
-      {/* Mobile Menu Panel */}
+      {/* Mobile Drawer Panel */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-2 animate-in slide-in-from-top-2 duration-150">
-          <div className="grid grid-cols-2 gap-2 pb-2">
+        <div className="lg:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 animate-in slide-in-from-top-2 duration-150 shadow-lg">
+          <div className="grid grid-cols-2 gap-2">
             {navLinks.map(link => (
               <button
                 key={link.id}
+                type="button"
                 onClick={() => handleNavClick(link.id)}
-                className={`p-2.5 rounded-xl text-xs font-semibold text-left transition-all ${
+                className={`p-3 rounded-xl text-xs font-semibold text-left transition-all ${
                   currentTab === link.id
-                    ? 'bg-blue-600 text-white font-bold'
+                    ? 'bg-slate-900 text-white font-bold'
                     : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                 }`}
               >
@@ -593,58 +487,64 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onSea
             ))}
           </div>
 
-          {/* Mobile Exam Hub Shortcuts */}
-          <div className="pt-2 border-t border-slate-100">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
-              CBSE Exam Tools & Practical Labs
-            </p>
-            <div className="grid grid-cols-1 gap-1.5">
-              {BOARD_HUB_ITEMS.map(item => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setCurrentTab(item.id);
-                      setMobileMenuOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`flex items-center justify-between p-2 rounded-xl text-xs font-semibold text-left transition-colors ${
-                      currentTab === item.id ? 'bg-blue-600 text-white font-bold' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-blue-500" />
-                      <span>{item.label}</span>
-                    </div>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
-                      {item.badge}
-                    </span>
-                  </button>
-                );
-              })}
+          {/* Mobile Class Quick Selector */}
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+              Select Class Filter
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedClassFilter('ALL');
+                  setMobileMenuOpen(false);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                  selectedClassFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                }`}
+              >
+                All
+              </button>
+              {CLASSES_LIST.map(c => (
+                <button
+                  key={c.level}
+                  type="button"
+                  onClick={() => {
+                    setSelectedClassFilter(c.level as ClassLevel);
+                    setCurrentTab('lms');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                    selectedClassFilter === c.level ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  Class {c.level}
+                </button>
+              ))}
             </div>
           </div>
 
           {!isAuthenticated && (
             <div className="pt-2 border-t border-slate-100 flex gap-2">
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  openAuthModal('login');
+                  setCurrentTab('student-login');
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold text-center"
+                className="flex-1 py-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold text-center"
               >
-                Student Login
+                Student Portal / Login
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   openAuthModal('register');
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold text-center"
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold text-center"
               >
-                Register
+                Register Free
               </button>
             </div>
           )}

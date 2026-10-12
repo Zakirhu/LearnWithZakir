@@ -40,149 +40,8 @@ export interface LeaderboardStudent {
   isCurrentUser?: boolean;
 }
 
-// Seeded benchmark top students from CBSE board institutions across India
-const PEER_LEADERBOARD_STUDENTS: LeaderboardStudent[] = [
-  {
-    id: 'std-1',
-    name: 'Aarav Sharma',
-    classLevel: 'X',
-    subject: 'IT (Code 402)',
-    schoolName: 'Delhi Public School, R.K. Puram',
-    accuracy: 98.5,
-    topicsCompleted: 28,
-    totalXp: 4950,
-    quizCount: 26,
-    streakDays: 18,
-    badge: 'Centum Master 🏆',
-    avatarBg: 'from-amber-400 to-yellow-600'
-  },
-  {
-    id: 'std-2',
-    name: 'Ananya Verma',
-    classLevel: 'XII',
-    subject: 'IP (Code 065)',
-    schoolName: 'Kendriya Vidyalaya No. 1, Delhi Cantt',
-    accuracy: 96.8,
-    topicsCompleted: 26,
-    totalXp: 4620,
-    quizCount: 24,
-    streakDays: 15,
-    badge: 'Pandas & SQL Wizard ⚡',
-    avatarBg: 'from-slate-300 to-slate-500'
-  },
-  {
-    id: 'std-3',
-    name: 'Rohan Kulkarni',
-    classLevel: 'XII',
-    subject: 'CS (Code 083)',
-    schoolName: 'Army Public School, Dhaula Kuan',
-    accuracy: 95.2,
-    topicsCompleted: 25,
-    totalXp: 4380,
-    quizCount: 22,
-    streakDays: 12,
-    badge: 'Python Specialist 🐍',
-    avatarBg: 'from-amber-600 to-amber-800'
-  },
-  {
-    id: 'std-4',
-    name: 'Priya Sundaram',
-    classLevel: 'X',
-    subject: 'IT (Code 402)',
-    schoolName: 'St. Xavier’s Sr. Sec. School, Jaipur',
-    accuracy: 94.0,
-    topicsCompleted: 23,
-    totalXp: 3950,
-    quizCount: 20,
-    streakDays: 10,
-    badge: 'Spreadsheets Ace 📊',
-    avatarBg: 'from-indigo-400 to-indigo-600'
-  },
-  {
-    id: 'std-5',
-    name: 'Ishaan Gupta',
-    classLevel: 'XI',
-    subject: 'IP (Code 065)',
-    schoolName: 'Air Force Bal Bharati, New Delhi',
-    accuracy: 92.5,
-    topicsCompleted: 21,
-    totalXp: 3600,
-    quizCount: 18,
-    streakDays: 9,
-    badge: 'Database Architect 💾',
-    avatarBg: 'from-emerald-400 to-teal-600'
-  },
-  {
-    id: 'std-6',
-    name: 'Sneha Mukherjee',
-    classLevel: 'X',
-    subject: 'IT (Code 402)',
-    schoolName: 'DAV Public School, Kolkata',
-    accuracy: 91.0,
-    topicsCompleted: 20,
-    totalXp: 3350,
-    quizCount: 17,
-    streakDays: 8,
-    badge: 'RDBMS Scholar 🌟',
-    avatarBg: 'from-purple-400 to-indigo-600'
-  },
-  {
-    id: 'std-7',
-    name: 'Aditya Nair',
-    classLevel: 'XII',
-    subject: 'Typo (Code 817)',
-    schoolName: 'Bhavan’s Vidya Mandir, Kochi',
-    accuracy: 89.5,
-    topicsCompleted: 19,
-    totalXp: 3100,
-    quizCount: 15,
-    streakDays: 7,
-    badge: 'Speed Typist ⌨️',
-    avatarBg: 'from-sky-400 to-blue-600'
-  },
-  {
-    id: 'std-8',
-    name: 'Meera Patel',
-    classLevel: 'IX',
-    subject: 'Comp Applications (165)',
-    schoolName: 'Sainik School, Balachadi',
-    accuracy: 88.0,
-    topicsCompleted: 18,
-    totalXp: 2850,
-    quizCount: 14,
-    streakDays: 6,
-    badge: 'Logic Luminary 🔥',
-    avatarBg: 'from-rose-400 to-pink-600'
-  },
-  {
-    id: 'std-9',
-    name: 'Karan Singhania',
-    classLevel: 'X',
-    subject: 'IT (Code 402)',
-    schoolName: 'Modern School, Barakhamba Road',
-    accuracy: 86.5,
-    topicsCompleted: 16,
-    totalXp: 2600,
-    quizCount: 13,
-    streakDays: 5,
-    badge: 'Digital Doc Star 📝',
-    avatarBg: 'from-cyan-400 to-blue-600'
-  },
-  {
-    id: 'std-10',
-    name: 'Tanvi Reddy',
-    classLevel: 'VIII',
-    subject: 'CS & Digital Literacy',
-    schoolName: 'Hyderabad Public School, Begumpet',
-    accuracy: 85.0,
-    topicsCompleted: 15,
-    totalXp: 2400,
-    quizCount: 12,
-    streakDays: 4,
-    badge: 'Rising Prodigy ✨',
-    avatarBg: 'from-teal-400 to-emerald-600'
-  }
-];
+// Active leaderboard students — dynamically populated from real student attempts
+const PEER_LEADERBOARD_STUDENTS: LeaderboardStudent[] = [];
 
 interface TopStudentsLeaderboardProps {
   onStartQuizClick?: () => void;
@@ -463,9 +322,44 @@ export const TopStudentsLeaderboard: React.FC<TopStudentsLeaderboardProps> = ({
         </div>
       )}
 
-      {/* TOP 3 PODIUM DISPLAY */}
-      {top3Podium.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-end relative z-10">
+      {/* LEADERBOARD CONTENT: EMPTY STATE vs PODIUM & DETAILED LIST */}
+      {sortedStudents.length === 0 ? (
+        <div className="py-14 px-6 text-center bg-slate-50/70 rounded-3xl border-2 border-dashed border-slate-200/90 relative z-10 flex flex-col items-center justify-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/10 to-yellow-500/10 border border-amber-300/40 text-amber-600 flex items-center justify-center shadow-xs">
+            <Trophy className="w-8 h-8 text-amber-500" />
+          </div>
+          <div className="space-y-1.5 max-w-md">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+              {searchQuery ? 'No Students Found' : 'Leaderboard is Empty'}
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {searchQuery
+                ? `No student matching "${searchQuery}". Clear your search query or select another class filter.`
+                : 'No student test scores recorded yet. The leaderboard is clean and awaiting its first high scorers! Take a chapter test to claim the #1 spot.'}
+            </p>
+          </div>
+          {onStartQuizClick && (
+            <button
+              onClick={onStartQuizClick}
+              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs shadow-md shadow-teal-600/20 transition-all cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+              <span>Take a Quiz to Claim #1</span>
+            </button>
+          )}
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400 font-medium">
+            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-amber-500" /> Live CBSE Rankings</span>
+            <span>•</span>
+            <span className="flex items-center gap-1"><Target className="w-3 h-3 text-blue-500" /> Accuracy Tracking</span>
+            <span>•</span>
+            <span className="flex items-center gap-1"><BookOpen className="w-3 h-3 text-emerald-500" /> Chapters Completed</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* TOP 3 PODIUM DISPLAY */}
+          {top3Podium.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 items-end relative z-10">
           
           {/* RANK 2 - SILVER */}
           {top3Podium[1] && (
@@ -624,8 +518,10 @@ export const TopStudentsLeaderboard: React.FC<TopStudentsLeaderboardProps> = ({
         </div>
 
         {restLeaderboard.length === 0 ? (
-          <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 text-xs">
-            No additional students found for the active filter.
+          <div className="text-center py-6 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 text-slate-500 text-xs">
+            {sortedStudents.length <= 3 
+              ? 'Ranks #4 and below are open. Take a chapter quiz to earn your spot on the leaderboard!' 
+              : 'No additional students found for the active filter.'}
           </div>
         ) : (
           restLeaderboard.map((student, idx) => {
@@ -706,6 +602,8 @@ export const TopStudentsLeaderboard: React.FC<TopStudentsLeaderboardProps> = ({
           })
         )}
       </div>
+        </>
+      )}
 
       {/* STUDENT PROFILE INSPECT MODAL */}
       {selectedInspectStudent && (

@@ -1,50 +1,146 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    /* UI/UX Pro Max Design System Tokens - Academic LMS & Tech Portal */
+    --color-primary: #0d9488;
+    --color-primary-hover: #0f766e;
+    --color-primary-light: #f0fdfa;
+    --color-primary-border: #99f6e4;
+    --color-primary-glow: rgba(13, 148, 136, 0.25);
+    
+    --color-navy: #0c3470;
+    --color-navy-hover: #082654;
+    --color-navy-light: #eff6ff;
+    
+    --color-accent: #d97706;
+    --color-accent-hover: #b45309;
+    --color-accent-light: #fffbeb;
+    
+    --color-bg: #f8fafc;
+    --color-card: #ffffff;
+    --color-card-border: #e2e8f0;
+    --color-text-main: #0f172a;
+    --color-text-muted: #475569;
+    --color-text-light: #64748b;
+    
+    --color-success: #059669;
+    --color-warning: #d97706;
+    --color-danger: #dc2626;
+
+    /* Spacing tokens */
+    --space-xs: 0.25rem;
+    --space-sm: 0.5rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    --space-xl: 2rem;
+    --space-2xl: 3rem;
+
+    /* Shadow tokens */
+    --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.03);
+    --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    letter-spacing: -0.011em;
+    letter-spacing: -0.012em;
+    color: var(--color-text-main);
+    background-color: var(--color-bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  h1, h2, h3, .font-heading {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
   code, pre, kbd, samp, .font-mono {
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Accessibility: Visible Focus Rings (WCAG 2.2 AA/AAA) */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 }
 
-/* Glassmorphism & Micro-animations */
+/* UI/UX Pro Max Component Styles */
+.card-pro {
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-pro:hover {
+  border-color: rgba(45, 212, 191, 0.6);
+  box-shadow: 0 10px 25px -5px rgba(13, 148, 136, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+}
+
+/* Glassmorphism & Micro-surfaces */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 .glass-dark {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(12, 52, 112, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.3);
+.glow-teal {
+  box-shadow: 0 0 25px -4px rgba(13, 148, 136, 0.35);
+}
+
+.glow-navy {
+  box-shadow: 0 0 25px -5px rgba(12, 52, 112, 0.3);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px -5px rgba(217, 119, 6, 0.35);
 }
 
 .glow-emerald {
   box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.3);
 }
 
-.glow-indigo {
-  box-shadow: 0 0 30px -5px rgba(99, 102, 241, 0.35);
+/* Tabular Numerals Utility */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zero-Pill Quiet Metadata Utility */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.meta-sep {
+  opacity: 0.4;
+  user-select: none;
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -63,10 +159,10 @@
 /* Keyframes for subtle live alerts & pulsing */
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 12px rgba(13, 148, 136, 0.35);
   }
   50% {
-    box-shadow: 0 0 30px rgba(99, 102, 241, 0.7);
+    box-shadow: 0 0 24px rgba(20, 184, 166, 0.65);
   }
 }
 

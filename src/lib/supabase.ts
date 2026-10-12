@@ -58,6 +58,89 @@ export async function syncProfileToSupabase(profile: StudentProfile): Promise<bo
 }
 
 /**
+ * Logs every student or admin login & registration live to Supabase
+ */
+export async function logUserLoginToSupabase(user: {
+  id: string;
+  name: string;
+  email: string;
+  studentId?: string;
+  classLevel: string;
+  role: string;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    // 1. Sync profile record
+    await supabase.from('profiles').upsert({
+      email: user.email,
+      name: user.name,
+      class_level: user.classLevel,
+      student_id: user.studentId || null,
+      role: user.role,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'email' });
+
+    // 2. Insert audit trail into user_logins table
+    await supabase.from('user_logins').insert({
+      user_id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      class_level: user.classLevel,
+      login_time: new Date().toISOString()
+    });
+
+    return true;
+  } catch (err) {
+    console.warn('Error logging user login to Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Bulk syncs an array of student accounts to Supabase 'profiles' table
+ */
+export async function bulkSyncStudentsToSupabase(students: Array<{
+  id?: string;
+  name: string;
+  email: string;
+  studentId?: string;
+  classLevel: string;
+  schoolName?: string;
+  targetExamYear?: string;
+}>): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    const payload = students.map(s => ({
+      email: s.email,
+      name: s.name,
+      class_level: s.classLevel,
+      student_id: s.studentId || null,
+      school_name: s.schoolName || null,
+      target_exam_year: s.targetExamYear || '2026',
+      role: 'student',
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(payload, { onConflict: 'email' });
+
+    if (error) {
+      console.warn('Supabase bulk student sync warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error bulk syncing students to Supabase:', err);
+    return false;
+  }
+}
+
+
+/**
  * Saves a quiz attempt to Supabase 'quiz_attempts' table
  */
 export async function saveQuizAttemptToSupabase(attempt: QuizAttempt, userEmail: string = 'student@zakirhub.edu'): Promise<boolean> {
@@ -219,6 +302,63 @@ export async function fetchPdfChaptersFromSupabase(): Promise<any[] | null> {
   } catch (err) {
     console.warn('Error fetching PDF chapters from Supabase:', err);
     return null;
+  }
+}
+
+/**
+ * Sends a secure email password reset link via Supabase Auth
+ */
+export async function sendPasswordResetEmail(email: string): Promise<{ success: boolean; message: string }> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: 'Supabase Auth is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.'
+    };
+  }
+
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const redirectUrl = window.location.origin;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: redirectUrl
+    });
+
+    if (error) {
+      return {
+        success: false,
+        message: `Supabase Auth: ${error.message}`
+      };
+    }
+
+    return {
+      success: true,
+      message: `A secure password reset link has been dispatched to ${cleanEmail} via Supabase Auth! Please check your email inbox.`
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Error communicating with Supabase Auth.'
+    };
+  }
+}
+
+/**
+ * Updates password in Supabase Auth session
+ */
+export async function updateSupabasePassword(newPassword: string): Promise<{ success: boolean; message: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: 'Supabase Auth is not configured.' };
+  }
+
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      return { success: false, message: error.message };
+    }
+    return { success: true, message: 'Password updated successfully in Supabase Auth.' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Failed to update password in Supabase Auth.' };
   }
 }
 

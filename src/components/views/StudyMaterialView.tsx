@@ -24,11 +24,16 @@ import {
   Upload,
   RefreshCw,
   FileType,
-  ExternalLink
+  ExternalLink,
+  FileQuestion,
+  Eye,
+  EyeOff,
+  Layers,
+  Tag
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { CLASSES_LIST, getSubjectsForClass, getChapters, SUBJECTS_LIST } from '../../data/curriculumData';
-import { ClassLevel, SubjectId, StudyMaterial, MaterialType } from '../../types';
+import { ClassLevel, SubjectId, StudyMaterial, MaterialType, Question, QuestionDifficulty, QuizConfig } from '../../types';
 import { 
   AnnotationToolbar, 
   StickyNotesDrawer, 
@@ -40,27 +45,41 @@ import {
 import { downloadChapterPDF } from '../../lib/pdfGenerator';
 import { SEO } from '../SEO';
 import { ChapterPdfUploader } from '../ChapterPdfUploader';
+import { PdfMcqExtractorModal } from '../PdfMcqExtractorModal';
+import { PYQPdfViewerModal } from '../PYQPdfViewerModal';
+import { PYQPaper } from '../../types';
 
 interface StudyMaterialViewProps {
   initialMaterialToOpen?: StudyMaterial | null;
+  initialTab?: 'notes' | 'qbank' | 'generator' | 'extractor';
   onClearInitialMaterial?: () => void;
   onStartQuizWithChapter?: (classLevel: ClassLevel, subjectId: SubjectId, chapterId?: string) => void;
+  onStartQuiz?: (quiz: QuizConfig) => void;
 }
 
 export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
   initialMaterialToOpen,
+  initialTab = 'notes',
   onClearInitialMaterial,
-  onStartQuizWithChapter
+  onStartQuizWithChapter,
+  onStartQuiz
 }) => {
   const { 
     studyMaterials, 
+    questionBank,
+    pyqPapers,
     selectedClassFilter, 
     setSelectedClassFilter, 
     studentProfile, 
     toggleBookmark,
-    syncAllCBSESkillMaterials,
-    userRole
+    toggleQuestionBookmark,
+    syncAllCurriculumMaterials,
+    userRole,
+    customChapters
   } = useApp();
+
+  // Sub-tab state: 'notes' | 'qbank' | 'generator' | 'extractor'
+  const [activeSubTab, setActiveSubTab] = useState<'notes' | 'qbank' | 'generator' | 'extractor'>(initialTab);
 
   const [activeClass, setActiveClass] = useState<ClassLevel | 'ALL'>(selectedClassFilter);
   const [activeSubject, setActiveSubject] = useState<SubjectId | 'ALL'>('ALL');
@@ -68,6 +87,25 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
   const [activeType, setActiveType] = useState<MaterialType | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [selectedPyqPaper, setSelectedPyqPaper] = useState<PYQPaper | null>(null);
+
+  // Question Bank Specific States
+  const [activeDifficulty, setActiveDifficulty] = useState<'all' | QuestionDifficulty>('all');
+  const [showOnlyBookmarkedQuestions, setShowOnlyBookmarkedQuestions] = useState(false);
+  const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({});
+  const [showAllAnswers, setShowAllAnswers] = useState(false);
+  const [copiedQuestionId, setCopiedQuestionId] = useState<string | null>(null);
+
+  // Question Paper Generator State
+  const [paperTitle, setPaperTitle] = useState('CBSE Mid-Term Examination 2026');
+  const [paperClass, setPaperClass] = useState<ClassLevel>('X');
+  const [paperSubject, setPaperSubject] = useState<SubjectId>('it-402');
+  const [paperCount, setPaperCount] = useState<number>(5);
+  const [paperTimeMins, setPaperTimeMins] = useState<number>(30);
+  const [generatedPaperQuestions, setGeneratedPaperQuestions] = useState<Question[] | null>(null);
+
+  // AI PDF MCQ Extractor State
+  const [showPdfExtractor, setShowPdfExtractor] = useState(false);
 
   // Reader Modal State
   const [activeReaderMaterial, setActiveReaderMaterial] = useState<StudyMaterial | null>(
@@ -99,8 +137,12 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
   const [activeHighlightColor, setActiveHighlightColor] = useState<HighlightColor>('yellow');
   const [isHighlightMode, setIsHighlightMode] = useState<boolean>(false);
   const [isNotesDrawerOpen, setIsNotesDrawerOpen] = useState<boolean>(false);
-  const [inlineNoteTargetParagraph, setInlineNoteTargetParagraph] = useState<number | null>(null);
-  const [inlineNoteText, setInlineNoteText] = useState<string>('');
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveSubTab(initialTab);
+    }
+  }, [initialTab]);
 
   React.useEffect(() => {
     try {
@@ -153,52 +195,11 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
     });
   };
 
-  const addStickyNote = (text: string, color: HighlightColor, paragraphIndex?: number) => {
-    if (!activeReaderMaterial) return;
-    const matId = activeReaderMaterial.id;
-    const newNote: StickyNote = {
-      id: `sn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      materialId: matId,
-      text,
-      color,
-      createdAt: 'Just now',
-      paragraphIndex
-    };
-
-    setStickyNotes(prev => ({
-      ...prev,
-      [matId]: [newNote, ...(prev[matId] || [])]
-    }));
-  };
-
-  const deleteStickyNote = (noteId: string) => {
-    if (!activeReaderMaterial) return;
-    const matId = activeReaderMaterial.id;
-    setStickyNotes(prev => ({
-      ...prev,
-      [matId]: (prev[matId] || []).filter(n => n.id !== noteId)
-    }));
-  };
-
-  const clearAllAnnotations = () => {
-    if (!activeReaderMaterial) return;
-    const matId = activeReaderMaterial.id;
-    setHighlights(prev => {
-      const updated = { ...prev };
-      delete updated[matId];
-      return updated;
-    });
-    setStickyNotes(prev => {
-      const updated = { ...prev };
-      delete updated[matId];
-      return updated;
-    });
-  };
-
   // Synchronize if prop changes
   React.useEffect(() => {
     if (initialMaterialToOpen) {
       setActiveReaderMaterial(initialMaterialToOpen);
+      setActiveSubTab('notes');
     }
   }, [initialMaterialToOpen]);
 
@@ -218,21 +219,41 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
   // Available chapters based on class and subject
   const availableChapters = useMemo(() => {
     if (activeClass === 'ALL' || activeSubject === 'ALL') return [];
-    return getChapters(activeClass, activeSubject);
-  }, [activeClass, activeSubject]);
+    return getChapters(activeClass, activeSubject, customChapters);
+  }, [activeClass, activeSubject, customChapters]);
 
-  // Filtered materials
+  // Unified study materials + Previous Year Question Papers (PYQs)
+  const combinedMaterials = useMemo(() => {
+    const pyqAsMaterials: StudyMaterial[] = (pyqPapers || []).map(p => ({
+      id: `pyq-mat-${p.id}`,
+      classLevel: p.classLevel,
+      subjectId: p.subjectId,
+      chapterId: 'pyq-board-exam',
+      chapterTitle: `${p.year} Board Exam Paper`,
+      title: `CBSE Board Examination Paper (${p.year}) — ${p.code}`,
+      type: 'previous_year_paper' as MaterialType,
+      description: `${p.examType} for Class ${p.classLevel} ${p.subjectName} (${p.code}). ${p.questionsSummary}. Official question paper with model answers and step-by-step marking schemes.`,
+      readTimeMinutes: (p.timeHours || 2) * 60,
+      uploadedDate: p.uploadedAt || `${p.year}-03-25`,
+      author: 'CBSE Examination Board',
+      content: `# CBSE Class ${p.classLevel} ${p.subjectName} (${p.code}) — Board Exam Paper ${p.year}\n\n**Examination:** ${p.examType}\n**Total Marks:** ${p.totalMarks}\n**Time Allowed:** ${p.timeHours} Hours\n\n### General Examination Instructions\n1. Section A: Objective & Multiple Choice Questions (1 Mark each)\n2. Section B: Subjective, Conceptual & Practical Coding Questions\n\n### Official Questions & Model Answers\n\n` + (p.sampleQuestions || []).map(q => `#### ${q.qNumber} [${q.marks} Mark${q.marks > 1 ? 's' : ''}]\n${q.question}\n\n**Official Model Answer:**\n${q.officialAnswer}\n\n*Examiner Step-Marking Scheme: ${q.stepMarkingScheme}*\n`).join('\n---\n'),
+      downloadableFileName: p.fileName || `CBSE_Class_${p.classLevel}_${p.code}_${p.year}.pdf`,
+      pdfDataUrl: p.pdfDataUrl,
+      fileSize: p.fileSize || '1.4 MB',
+      tags: ['Previous Year Paper', 'PYQ', p.year, p.code, `Class ${p.classLevel}`],
+      sourceUrl: undefined
+    }));
+
+    return [...studyMaterials, ...pyqAsMaterials];
+  }, [studyMaterials, pyqPapers]);
+
+  // Filtered study materials (Notes, PYQs & PDFs)
   const filteredMaterials = useMemo(() => {
-    return studyMaterials.filter(mat => {
-      // Class filter
+    return combinedMaterials.filter(mat => {
       if (activeClass !== 'ALL' && mat.classLevel !== activeClass) return false;
-      // Subject filter
       if (activeSubject !== 'ALL' && mat.subjectId !== activeSubject) return false;
-      // Chapter filter
-      if (activeChapter !== 'ALL' && mat.chapterId !== activeChapter) return false;
-      // Type filter
+      if (activeChapter !== 'ALL' && mat.chapterId !== activeChapter && mat.type !== 'previous_year_paper') return false;
       if (activeType !== 'ALL' && mat.type !== activeType) return false;
-      // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = mat.title.toLowerCase().includes(q);
@@ -243,22 +264,52 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
       }
       return true;
     });
-  }, [studyMaterials, activeClass, activeSubject, activeChapter, activeType, searchQuery]);
+  }, [combinedMaterials, activeClass, activeSubject, activeChapter, activeType, searchQuery]);
 
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
+  // Filtered Questions (Question Bank)
+  const filteredQuestions = useMemo(() => {
+    return questionBank.filter(q => {
+      if (activeClass !== 'ALL' && q.classLevel !== activeClass) return false;
+      if (activeSubject !== 'ALL' && q.subjectId !== activeSubject) return false;
+      if (activeChapter !== 'ALL' && q.chapterId !== activeChapter) return false;
+      if (activeDifficulty !== 'all' && q.difficulty !== activeDifficulty) return false;
+      if (showOnlyBookmarkedQuestions && !(studentProfile.bookmarkedQuestions || []).includes(q.id)) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesQ = q.question.toLowerCase().includes(query);
+        const matchesCh = q.chapterTitle.toLowerCase().includes(query);
+        const matchesOpt = q.options.some(o => o.toLowerCase().includes(query));
+        const matchesExp = q.explanation.toLowerCase().includes(query);
+        if (!matchesQ && !matchesCh && !matchesOpt && !matchesExp) return false;
+      }
+      return true;
+    });
+  }, [questionBank, activeClass, activeSubject, activeChapter, activeDifficulty, searchQuery, showOnlyBookmarkedQuestions, studentProfile.bookmarkedQuestions]);
+
+  const toggleAnswer = (id: string) => {
+    setRevealedAnswers(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleShare = (mat: StudyMaterial) => {
-    navigator.clipboard.writeText(window.location.href);
-    setShowShareNotification(true);
-    setTimeout(() => setShowShareNotification(false), 2500);
+  const handleCopyQuestion = (q: Question) => {
+    const text = `Q: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}\nCorrect Answer: ${String.fromCharCode(65 + q.correctOptionIndex)} - ${q.options[q.correctOptionIndex]}\nExplanation: ${q.explanation}`;
+    navigator.clipboard.writeText(text);
+    setCopiedQuestionId(q.id);
+    setTimeout(() => setCopiedQuestionId(null), 2000);
+  };
+
+  const handleGeneratePaper = () => {
+    const eligible = questionBank.filter(q => q.classLevel === paperClass && q.subjectId === paperSubject);
+    const pool = eligible.length > 0 ? eligible : questionBank.filter(q => q.classLevel === paperClass);
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    setGeneratedPaperQuestions(shuffled.slice(0, Math.min(paperCount, shuffled.length)));
   };
 
   const getTypeBadge = (type: MaterialType) => {
     switch (type) {
+      case 'previous_year_paper':
+        return { label: 'Previous Year Paper (PYQ)', color: 'bg-rose-50 text-rose-700 border-rose-200' };
       case 'notes':
         return { label: 'Chapter Notes', color: 'bg-blue-50 text-blue-700 border-blue-200' };
       case 'practical_file':
@@ -268,7 +319,9 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
       case 'cheat_sheet':
         return { label: 'Cheat Sheet', color: 'bg-purple-50 text-purple-700 border-purple-200' };
       case 'video':
-        return { label: 'Video Lecture', color: 'bg-rose-50 text-rose-700 border-rose-200' };
+        return { label: 'Video Lecture', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+      default:
+        return { label: 'Study Document', color: 'bg-slate-50 text-slate-700 border-slate-200' };
     }
   };
 
@@ -278,42 +331,41 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
         title={
           activeReaderMaterial 
             ? `${activeReaderMaterial.title} (Class ${activeReaderMaterial.classLevel})`
-            : activeClass !== 'ALL' 
-              ? `Class ${activeClass} Study Materials & Chapter Notes`
-              : 'Study Material & Chapter Notes'
+            : activeSubTab === 'qbank'
+              ? 'Question Bank & MCQs'
+              : activeClass !== 'ALL' 
+                ? `Class ${activeClass} Study Materials & Chapter Notes`
+                : 'Study Material & Question Bank'
         }
         description={
           activeReaderMaterial 
             ? activeReaderMaterial.description 
-            : 'Access comprehensive chapter notes, practical code files, and key board exam questions for Classes VI–XII.'
+            : 'Access comprehensive chapter notes, PDF notes, question bank MCQs, and custom test paper generation.'
         }
-        keywords={['Study Material', 'Chapter Notes', 'Practical File', 'CBSE Notes', 'Zakir Hussain', 'IT 402', 'IP 065']}
+        keywords={['Study Material', 'Question Bank', 'Chapter Notes', 'CBSE MCQs', 'IT 402', 'IP 065', 'Zakir Hussain']}
       />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">
             <BookOpen className="w-4 h-4" />
-            <span>Structured Study Repository</span>
+            <span>Integrated CBSE Learning & Assessment Center</span>
           </div>
           <h1 className="text-3xl font-bold text-slate-900">
-            Study Material: Class → Subject → Chapter
+            Study Material & Question Bank
           </h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Read chapter-wise revision notes, copy-paste practical scripts for Python & SQL, and review previous years' CBSE board exam questions.
+            Access chapter notes, PDF textbooks, curated board-pattern MCQs, printable exam paper generator, and AI PDF MCQ extractor.
           </p>
-          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            <span>Aligned with <strong>CBSESkillEducation.com</strong> Information Technology Curriculum (Code 402 & 802) • Chapter-wise PDF Downloads</span>
-          </div>
         </div>
 
-        {/* Actions & Search */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+        {/* Actions Bar */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={() => setIsUploadModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>Upload Chapter PDF</span>
@@ -321,33 +373,86 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
 
           <button
             type="button"
-            onClick={() => syncAllCBSESkillMaterials()}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shrink-0"
-            title="Reload/Sync all CBSE Skill Education IT chapters"
+            onClick={() => setShowPdfExtractor(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Sync CBSE Chapters</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>Extract MCQs from PDF</span>
           </button>
 
-          <div className="relative w-full sm:w-60">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search chapters & notes..."
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:border-blue-500"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => syncAllCurriculumMaterials()}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            title="Reload/Sync all Information Technology chapters"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+            <span>Sync Chapters</span>
+          </button>
         </div>
       </div>
 
-      {/* Filter Pipeline: Class -> Subject -> Chapter */}
+      {/* Sub-Nav Tabs Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            onClick={() => setActiveSubTab('notes')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubTab === 'notes'
+                ? 'bg-white text-blue-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-blue-600" />
+            <span>Chapter Notes & PDFs ({filteredMaterials.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('qbank')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubTab === 'qbank'
+                ? 'bg-white text-purple-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <FileQuestion className="w-4 h-4 text-purple-600" />
+            <span>Question Bank & Board MCQs ({filteredQuestions.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              handleGeneratePaper();
+              setActiveSubTab('generator');
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubTab === 'generator'
+                ? 'bg-white text-emerald-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Printer className="w-4 h-4 text-emerald-600" />
+            <span>Paper Generator</span>
+          </button>
+        </div>
+
+        <div className="relative w-full sm:w-64 px-1 pb-1 sm:p-0">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={activeSubTab === 'qbank' ? "Search MCQs & options..." : "Search chapters & notes..."}
+            className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Shared Filter Pipeline: Class -> Subject -> Chapter */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         {/* 1. Class Selector */}
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
-            1. Select Class
+            1. Select Class (VI–XII)
           </label>
           <div className="flex flex-wrap gap-1.5">
             <button
@@ -357,7 +462,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
                 setActiveSubject('ALL');
                 setActiveChapter('ALL');
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeClass === 'ALL'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -374,7 +479,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
                   setActiveSubject('ALL');
                   setActiveChapter('ALL');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeClass === c.level
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -397,7 +502,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
                 setActiveSubject('ALL');
                 setActiveChapter('ALL');
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeSubject === 'ALL'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -412,7 +517,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
                   setActiveSubject(sub.id);
                   setActiveChapter('ALL');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   activeSubject === sub.id
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -424,7 +529,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
           </div>
         </div>
 
-        {/* 3. Chapter Selector (if specific subject selected) */}
+        {/* 3. Chapter Selector */}
         {availableChapters.length > 0 && (
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
@@ -433,7 +538,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => setActiveChapter('ALL')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer ${
                   activeChapter === 'ALL'
                     ? 'bg-slate-800 text-white'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -445,7 +550,7 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
                 <button
                   key={ch.id}
                   onClick={() => setActiveChapter(ch.id)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer ${
                     activeChapter === ch.id
                       ? 'bg-slate-800 text-white'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -458,544 +563,682 @@ export const StudyMaterialView: React.FC<StudyMaterialViewProps> = ({
           </div>
         )}
 
-        {/* 4. Type Pills */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-slate-400 font-medium">Format:</span>
-          {(['ALL', 'notes', 'practical_file', 'important_questions', 'cheat_sheet'] as (MaterialType | 'ALL')[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setActiveType(t)}
-              className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                activeType === t
-                  ? 'bg-slate-900 text-white font-medium'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {t === 'ALL' ? 'All Types' : t.replace('_', ' ').toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Material Cards Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Showing {filteredMaterials.length} Study Package{filteredMaterials.length === 1 ? '' : 's'}
-          </span>
-          {studentProfile.bookmarks.length > 0 && (
-            <span className="text-xs text-blue-600 font-medium">
-              ★ {studentProfile.bookmarks.length} Bookmarked Material{studentProfile.bookmarks.length === 1 ? '' : 's'}
-            </span>
-          )}
-        </div>
-
-        {filteredMaterials.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
-            <BookOpen className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-            <h3 className="text-base font-bold text-slate-800">No study materials found</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              No content matched the current filters. Try changing your class, subject or search keywords.
-            </p>
-            <button
-              onClick={() => {
-                setActiveClass('ALL');
-                setActiveSubject('ALL');
-                setActiveChapter('ALL');
-                setActiveType('ALL');
-                setSearchQuery('');
-              }}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold"
-            >
-              Reset All Filters
-            </button>
+        {/* Format or Difficulty Filters depending on sub-tab */}
+        {activeSubTab === 'notes' && (
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Format:</span>
+            {(['ALL', 'notes', 'previous_year_paper', 'important_questions', 'practical_file', 'cheat_sheet'] as (MaterialType | 'ALL')[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setActiveType(t)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  activeType === t
+                    ? 'bg-slate-900 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-50 border border-slate-200/70'
+                }`}
+              >
+                {t === 'ALL'
+                  ? 'All Formats'
+                  : t === 'previous_year_paper'
+                    ? 'Previous Year Paper'
+                    : t === 'notes'
+                      ? 'Chapter Notes (PDF)'
+                      : t.replace(/_/g, ' ').toUpperCase()}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredMaterials.map(mat => {
-              const isBookmarked = studentProfile.bookmarks.includes(mat.id);
-              const badge = getTypeBadge(mat.type);
+        )}
 
-              return (
-                <div
-                  key={mat.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between overflow-hidden group"
+        {activeSubTab === 'qbank' && (
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Difficulty:</span>
+              {(['all', 'easy', 'medium', 'hard'] as ('all' | QuestionDifficulty)[]).map(d => (
+                <button
+                  key={d}
+                  onClick={() => setActiveDifficulty(d)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer uppercase ${
+                    activeDifficulty === d
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  <div className="p-5">
-                    {/* Top Tag Row */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 text-[11px] font-bold bg-blue-100 text-blue-800 rounded">
-                          Class {mat.classLevel}
-                        </span>
-                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${badge.color}`}>
-                          {badge.label}
-                        </span>
-                      </div>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          toggleBookmark(mat.id);
-                        }}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          isBookmarked ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-slate-600'
-                        }`}
-                        title={isBookmarked ? 'Remove bookmark' : 'Bookmark this note'}
-                      >
-                        {isBookmarked ? <BookmarkCheck className="w-4 h-4 fill-amber-500" /> : <Bookmark className="w-4 h-4" />}
-                      </button>
-                    </div>
+                  {d}
+                </button>
+              ))}
+            </div>
 
-                    <h3 
-                      onClick={() => setActiveReaderMaterial(mat)}
-                      className="font-bold text-slate-900 text-base mb-1.5 group-hover:text-blue-600 cursor-pointer transition-colors"
-                    >
-                      {mat.title}
-                    </h3>
-                    <p className="text-xs font-semibold text-blue-600 mb-2">
-                      {mat.chapterTitle}
-                    </p>
-                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3 mb-4">
-                      {mat.description}
-                    </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowOnlyBookmarkedQuestions(!showOnlyBookmarkedQuestions)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  showOnlyBookmarkedQuestions
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <Bookmark className={`w-3.5 h-3.5 ${showOnlyBookmarkedQuestions ? 'fill-white' : ''}`} />
+                <span>Bookmarked ({studentProfile.bookmarkedQuestions?.length || 0})</span>
+              </button>
 
-                    {/* Tags */}
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {mat.tags.map(t => (
-                        <span key={t} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Card Action footer */}
-                  <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadChapterPDF(mat);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
-                      title={`Download ${mat.downloadableFileName || 'Chapter PDF'}`}
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Download PDF</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveReaderMaterial(mat)}
-                      className="flex items-center gap-1 font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
-                    >
-                      <span>Read Notes</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+              <button
+                onClick={() => setShowAllAnswers(!showAllAnswers)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+              >
+                {showAllAnswers ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>{showAllAnswers ? 'Hide Answers' : 'Reveal Answers'}</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* SUB-TAB CONTENT 1: CHAPTER NOTES & PDF MATERIALS */}
+      {activeSubTab === 'notes' && (
+        <div>
+          {/* Featured: Manual PDF MCQ Extractor Callout */}
+          <div className="mb-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-2xl p-5 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm border border-slate-800">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-400/30 flex items-center justify-center font-bold shrink-0">
+                <Sparkles className="w-5 h-5 text-purple-300" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white">Manual PDF MCQ Extractor & Quiz Generator</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                    Instant Quiz Mode
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5 max-w-xl">
+                  Upload any question paper, revision notes, or chapter PDF manually. Extract multiple-choice questions with answer keys and launch an interactive quiz instantly.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPdfExtractor(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 cursor-pointer shrink-0"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Upload PDF & Start Quiz</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Showing {filteredMaterials.length} Study Package{filteredMaterials.length === 1 ? '' : 's'}
+            </span>
+            {studentProfile.bookmarks.length > 0 && (
+              <span className="text-xs text-blue-600 font-medium">
+                ★ {studentProfile.bookmarks.length} Bookmarked Material{studentProfile.bookmarks.length === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+
+          {filteredMaterials.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
+              <BookOpen className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+              <h3 className="text-base font-bold text-slate-800">No study materials found</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                No content matched the current filters. Try changing your class, subject or search keywords.
+              </p>
+              <button
+                onClick={() => {
+                  setActiveClass('ALL');
+                  setActiveSubject('ALL');
+                  setActiveChapter('ALL');
+                  setActiveType('ALL');
+                  setSearchQuery('');
+                }}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Reset All Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredMaterials.map(mat => {
+                const isBookmarked = studentProfile.bookmarks.includes(mat.id);
+                const badge = getTypeBadge(mat.type);
+
+                return (
+                  <div
+                    key={mat.id}
+                    className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between overflow-hidden group"
+                  >
+                    <div className="p-5">
+                      {/* Top Tag Row */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 text-[11px] font-bold bg-blue-100 text-blue-800 rounded">
+                            Class {mat.classLevel}
+                          </span>
+                          <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            toggleBookmark(mat.id);
+                          }}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isBookmarked ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-slate-600'
+                          }`}
+                          title={isBookmarked ? 'Remove bookmark' : 'Bookmark this note'}
+                        >
+                          {isBookmarked ? <BookmarkCheck className="w-4 h-4 fill-amber-500" /> : <Bookmark className="w-4 h-4" />}
+                        </button>
+                      </div>
+
+                      <h3 
+                        onClick={() => setActiveReaderMaterial(mat)}
+                        className="font-bold text-slate-900 text-base mb-1.5 group-hover:text-blue-600 cursor-pointer transition-colors"
+                      >
+                        {mat.title}
+                      </h3>
+                      <p className="text-xs font-semibold text-blue-600 mb-2">
+                        {mat.chapterTitle}
+                      </p>
+                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3 mb-4">
+                        {mat.description}
+                      </p>
+
+                      {/* Tags */}
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {mat.tags.map(t => (
+                          <span key={t} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Card Action footer */}
+                    <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadChapterPDF(mat);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                          title={`Download ${mat.downloadableFileName || 'PDF Document'}`}
+                        >
+                          <Download className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>PDF</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPdfExtractor(true);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold border border-purple-200 transition-colors cursor-pointer"
+                          title="Extract MCQs and create quiz from this document"
+                        >
+                          <Sparkles className="w-3 h-3 text-purple-600" />
+                          <span>Extract Quiz</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const pyqMatch = pyqPapers.find(p => `pyq-mat-${p.id}` === mat.id || p.id === mat.id);
+                          if (pyqMatch) {
+                            setSelectedPyqPaper(pyqMatch);
+                          } else {
+                            setActiveReaderMaterial(mat);
+                          }
+                        }}
+                        className="flex items-center gap-1 font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+                      >
+                        <span>{mat.type === 'previous_year_paper' ? 'View Paper' : 'Read Notes'}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-TAB CONTENT 2: QUESTION BANK & MCQs */}
+      {activeSubTab === 'qbank' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Showing {filteredQuestions.length} Questions
+            </span>
+          </div>
+
+          {filteredQuestions.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
+              <FileQuestion className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+              <h3 className="text-base font-bold text-slate-800">No questions found</h3>
+              <p className="text-xs text-slate-500 mt-1">Try resetting your filters or search keywords.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredQuestions.map((q, idx) => {
+                const isRevealed = showAllAnswers || !!revealedAnswers[q.id];
+
+                return (
+                  <div
+                    key={q.id}
+                    className="p-6 bg-white rounded-2xl border border-slate-200/90 shadow-xs space-y-4 hover:border-slate-300 transition-all"
+                  >
+                    {/* Question Header */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 rounded">
+                          Class {q.classLevel}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600">
+                          {q.chapterTitle}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                          {q.difficulty}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-slate-500 font-semibold mr-1">
+                          {q.marks} Mark{q.marks === 1 ? '' : 's'}
+                        </span>
+                        {(() => {
+                          const isBookmarked = (studentProfile.bookmarkedQuestions || []).includes(q.id);
+                          return (
+                            <button
+                              onClick={() => toggleQuestionBookmark(q.id)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                isBookmarked
+                                  ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                                  : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                              }`}
+                              title={isBookmarked ? 'Remove bookmark' : 'Bookmark this question for revision'}
+                            >
+                              {isBookmarked ? (
+                                <BookmarkCheck className="w-4 h-4 fill-amber-500 text-amber-600" />
+                              ) : (
+                                <Bookmark className="w-4 h-4" />
+                              )}
+                            </button>
+                          );
+                        })()}
+                        <button
+                          onClick={() => handleCopyQuestion(q)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          title="Copy question text"
+                        >
+                          {copiedQuestionId === q.id ? (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Question Text */}
+                    <p className="font-semibold text-slate-900 text-base leading-relaxed">
+                      {q.question}
+                    </p>
+
+                    {/* 4 Options Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {q.options.map((opt, optIdx) => {
+                        const isCorrect = q.correctOptionIndex === optIdx;
+                        return (
+                          <div
+                            key={optIdx}
+                            className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 transition-colors ${
+                              isRevealed && isCorrect
+                                ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-semibold'
+                                : 'bg-slate-50 border-slate-200/80 text-slate-700'
+                            }`}
+                          >
+                            <span className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-[11px] ${
+                              isRevealed && isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {String.fromCharCode(65 + optIdx)}
+                            </span>
+                            <span className="flex-1">{opt}</span>
+                            {isRevealed && isCorrect && (
+                              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Answer Reveal Toggle & Explanation */}
+                    <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <button
+                        onClick={() => toggleAnswer(q.id)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                      >
+                        {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{isRevealed ? 'Hide Answer & Explanation' : 'Show Answer & Concept Explanation'}</span>
+                      </button>
+
+                      {onStartQuizWithChapter && (
+                        <button
+                          onClick={() => onStartQuizWithChapter(q.classLevel, q.subjectId, q.chapterId)}
+                          className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Play className="w-3 h-3 fill-purple-600 text-purple-600" />
+                          <span>Practice Test for this Chapter</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isRevealed && (
+                      <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-xl text-xs space-y-1 animate-in fade-in duration-200">
+                        <p className="font-bold text-purple-950 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Correct Answer: Option {String.fromCharCode(65 + q.correctOptionIndex)} ({q.options[q.correctOptionIndex]})</span>
+                        </p>
+                        <p className="text-purple-900 leading-relaxed pl-5">
+                          {q.explanation}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-TAB CONTENT 3: QUESTION PAPER GENERATOR */}
+      {activeSubTab === 'generator' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-6">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">CBSE Printable Exam Paper Generator</h2>
+              <p className="text-xs text-slate-500 mt-1">Configure class, subject, and question count to create a formatted test paper ready to print or save as PDF.</p>
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print Test Paper</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">Paper Title</label>
+              <input
+                type="text"
+                value={paperTitle}
+                onChange={e => setPaperTitle(e.target.value)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">Class Level</label>
+              <select
+                value={paperClass}
+                onChange={e => setPaperClass(e.target.value as ClassLevel)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+              >
+                {CLASSES_LIST.map(c => (
+                  <option key={c.level} value={c.level}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">Subject</label>
+              <select
+                value={paperSubject}
+                onChange={e => setPaperSubject(e.target.value as SubjectId)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+              >
+                {getSubjectsForClass(paperClass).map(s => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-600 block mb-1">Question Count</label>
+              <select
+                value={paperCount}
+                onChange={e => setPaperCount(Number(e.target.value))}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+              >
+                <option value={5}>5 Questions</option>
+                <option value={10}>10 Questions</option>
+                <option value={15}>15 Questions</option>
+                <option value={20}>20 Questions</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleGeneratePaper}
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Generate / Regenerate Paper</span>
+            </button>
+          </div>
+
+          {/* Paper View Container */}
+          {generatedPaperQuestions && (
+            <div className="p-8 bg-white border border-slate-300 rounded-2xl space-y-6 shadow-sm print:border-none print:shadow-none">
+              <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-wide">{paperTitle}</h2>
+                <div className="flex justify-between text-xs font-bold text-slate-700 pt-2">
+                  <span>CLASS: {paperClass}</span>
+                  <span>SUBJECT CODE: {paperSubject.toUpperCase()}</span>
+                  <span>TIME ALLOWED: {paperTimeMins} MINS</span>
+                  <span>MAX MARKS: {generatedPaperQuestions.reduce((acc, q) => acc + q.marks, 0)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {generatedPaperQuestions.map((q, idx) => (
+                  <div key={q.id} className="space-y-2">
+                    <div className="flex items-start justify-between">
+                      <p className="font-bold text-slate-900 text-sm">
+                        Q{idx + 1}. {q.question}
+                      </p>
+                      <span className="text-xs font-semibold text-slate-500">[{q.marks} Mark]</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pl-4 text-xs text-slate-800">
+                      {q.options.map((opt, oIdx) => (
+                        <p key={oIdx}>({String.fromCharCode(97 + oIdx)}) {opt}</p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Interactive Document Reader Modal */}
       {activeReaderMaterial && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
           <div className={`relative w-full ${isNotesDrawerOpen ? 'max-w-6xl' : 'max-w-4xl'} bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6 flex flex-col max-h-[92vh] transition-all`}>
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-xs font-bold bg-blue-500 text-white rounded">
+            {/* Modal Top Bar */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-blue-500 text-white uppercase tracking-wider">
                   Class {activeReaderMaterial.classLevel}
                 </span>
-                <span className="text-xs text-slate-300 font-medium hidden sm:inline">
-                  {activeReaderMaterial.chapterTitle}
-                </span>
+                <div>
+                  <h2 className="font-bold text-base text-white truncate max-w-md sm:max-w-xl">
+                    {activeReaderMaterial.title}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    {activeReaderMaterial.chapterTitle}
+                  </p>
+                </div>
               </div>
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => downloadChapterPDF(activeReaderMaterial)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs cursor-pointer"
-                  title="Download / Print Chapter PDF"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Download PDF"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Download PDF</span>
+                  <span className="hidden sm:inline">PDF</span>
                 </button>
+
                 <button
-                  onClick={() => handleShare(activeReaderMaterial)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-                  title="Share Link"
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveReaderMaterial(null);
-                    if (onClearInitialMaterial) onClearInitialMaterial();
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                  onClick={() => setActiveReaderMaterial(null)}
+                  className="p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Annotation & Sticky Notes Toolbar */}
-            <AnnotationToolbar
-              activeColor={activeHighlightColor}
-              onColorChange={setActiveHighlightColor}
-              isHighlightMode={isHighlightMode}
-              onToggleHighlightMode={() => setIsHighlightMode(!isHighlightMode)}
-              stickyNotesCount={currentStickyNotes.length}
-              highlightsCount={currentHighlights.length}
-              onOpenNewNoteModal={() => {
-                setIsNotesDrawerOpen(true);
-              }}
-              onToggleNotesDrawer={() => setIsNotesDrawerOpen(!isNotesDrawerOpen)}
-              isNotesDrawerOpen={isNotesDrawerOpen}
-              onClearAllAnnotations={clearAllAnnotations}
-            />
+            {/* Toolbar row */}
+            <div className="px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsHighlightMode(!isHighlightMode)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    isHighlightMode ? 'bg-amber-500 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <Highlighter className="w-3.5 h-3.5" />
+                  <span>{isHighlightMode ? 'Highlighting Active' : 'Highlight Tool'}</span>
+                </button>
 
-            {/* Modal Body & Sticky Notes Drawer Flex */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Scrollable Content Body */}
-              <div className="flex-1 p-6 sm:p-8 overflow-y-auto space-y-6 text-slate-800">
-                {showShareNotification && (
-                  <div className="p-2 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-center font-medium">
-                    ✓ Material link copied to your clipboard!
-                  </div>
-                )}
+                <button
+                  onClick={() => setIsNotesDrawerOpen(!isNotesDrawerOpen)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    isNotesDrawerOpen ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <StickyNoteIcon className="w-3.5 h-3.5" />
+                  <span>Sticky Notes ({currentStickyNotes.length})</span>
+                </button>
 
-                {/* Title & Metadata */}
-                <div>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                    {activeReaderMaterial.title}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 mt-2">
-                    <span>Author: <strong className="text-slate-700">{activeReaderMaterial.author}</strong></span>
-                    <span>•</span>
-                    <span>Published: {activeReaderMaterial.uploadedDate}</span>
-                    <span>•</span>
-                    <span>Est. Read: {activeReaderMaterial.readTimeMinutes} mins</span>
-                    {currentHighlights.length > 0 && (
-                      <span className="text-amber-600 font-semibold">• {currentHighlights.length} Highlight{currentHighlights.length === 1 ? '' : 's'}</span>
-                    )}
-                    {currentStickyNotes.length > 0 && (
-                      <span className="text-blue-600 font-semibold">• {currentStickyNotes.length} Note{currentStickyNotes.length === 1 ? '' : 's'}</span>
-                    )}
-                  </div>
+                <button
+                  onClick={() => {
+                    const mat = activeReaderMaterial;
+                    setActiveReaderMaterial(null);
+                    if (mat) {
+                      setActiveSubTab('qbank');
+                      setActiveClass(mat.classLevel);
+                      setActiveSubject(mat.subjectId);
+                      setActiveChapter(mat.chapterId);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FileQuestion className="w-3.5 h-3.5" />
+                  <span>Practice Chapter MCQs</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-slate-500 text-xs">
+                <span>Reading Time: ~{(activeReaderMaterial as any).estimatedReadTimeMinutes || 10} mins</span>
+              </div>
+            </div>
+
+            {/* Document Content Body */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
+              <div className="prose max-w-none space-y-4">
+                <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-xl text-xs text-blue-900 leading-relaxed">
+                  <p className="font-bold text-sm mb-1">Chapter Overview & Core Concepts</p>
+                  <p>{activeReaderMaterial.description}</p>
                 </div>
 
-                {/* Download / Practice bar */}
-                <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50/40 border border-blue-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="text-xs text-blue-950">
-                    <span className="font-extrabold text-blue-900 text-sm flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-500" />
-                      <span>CBSESkillEducation Aligned Chapter Resource</span>
-                    </span>
-                    <p className="text-blue-700/90 text-xs mt-0.5">
-                      Download complete chapter PDF notes with diagrams, definitions, and CBSE board solutions.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => downloadChapterPDF(activeReaderMaterial)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Download Chapter PDF</span>
-                    </button>
-                    {onStartQuizWithChapter && (
-                      <button
-                        onClick={() => {
-                          onStartQuizWithChapter(
-                            activeReaderMaterial.classLevel,
-                            activeReaderMaterial.subjectId,
-                            activeReaderMaterial.chapterId
-                          );
-                          setActiveReaderMaterial(null);
-                        }}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shrink-0 shadow-xs cursor-pointer"
-                      >
-                        <HelpCircle className="w-4 h-4" />
-                        <span>Chapter Quiz</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Code Snippet Playground (if available) */}
-                {activeReaderMaterial.codeSnippet && (
-                  <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 text-slate-100 shadow-md">
-                    <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-                      <span className="text-xs font-mono text-slate-400 uppercase">
-                        Code Snippet ({activeReaderMaterial.codeSnippet.language})
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setCodeRunOutputVisible(!codeRunOutputVisible)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
-                        >
-                          <Play className="w-3 h-3" />
-                          <span>{codeRunOutputVisible ? 'Hide Output' : 'Simulate Run'}</span>
-                        </button>
-                        <button
-                          onClick={() => handleCopyCode(activeReaderMaterial.codeSnippet!.code)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition-colors"
-                        >
-                          {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
-                        </button>
-                      </div>
-                    </div>
-                    <pre className="p-4 text-xs font-mono overflow-x-auto leading-relaxed text-blue-200">
-                      <code>{activeReaderMaterial.codeSnippet.code}</code>
-                    </pre>
-                    {codeRunOutputVisible && activeReaderMaterial.codeSnippet.output && (
-                      <div className="p-3 bg-slate-900 border-t border-slate-800 text-xs font-mono">
-                        <span className="text-[10px] text-emerald-400 font-bold block mb-1">
-                          CONSOLE OUTPUT:
-                        </span>
-                        <pre className="text-emerald-300 whitespace-pre-wrap">
-                          {activeReaderMaterial.codeSnippet.output}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Interactive Main Content Body with Line Highlighting & Sticky Notes */}
-                <div className="border-t border-slate-100 pt-4 space-y-3">
-                  {isHighlightMode && (
-                    <div className="p-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-medium">
-                        <Highlighter className="w-4 h-4 text-amber-600" />
-                        <span>Highlighter is ON: Click any passage or line to toggle highlight in {COLOR_CLASSES[activeHighlightColor].name}.</span>
-                      </span>
-                      <button
-                        onClick={() => setIsHighlightMode(false)}
-                        className="text-amber-800 hover:text-amber-950 font-bold underline text-[11px]"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  )}
-
-                  {activeReaderMaterial.content.split('\n\n').map((paragraphText, pIdx) => {
-                    const highlight = currentHighlights.find(h => h.paragraphIndex === pIdx);
-                    const colorMeta = highlight ? COLOR_CLASSES[highlight.color] : null;
-                    const paragraphNotes = currentStickyNotes.filter(n => n.paragraphIndex === pIdx);
-
+                {/* Main Text Content */}
+                <div className="text-sm text-slate-800 leading-relaxed space-y-4 font-sans">
+                  {activeReaderMaterial.content.split('\n\n').map((paragraph, pIdx) => {
+                    const isHighlighted = currentHighlights.some(h => h.paragraphIndex === pIdx);
+                    
                     return (
-                      <div
-                        key={pIdx}
-                        className={`relative group rounded-xl p-3 transition-all border ${
-                          highlight
-                            ? `${colorMeta?.bg} ${colorMeta?.border} shadow-2xs`
-                            : 'border-transparent hover:border-slate-200 hover:bg-slate-50/70'
-                        }`}
-                      >
-                        {/* Hover Quick Action Buttons */}
-                        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs z-10">
-                          <button
-                            onClick={() => toggleHighlightLine(pIdx, paragraphText)}
-                            className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors ${
-                              highlight ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:text-amber-700 hover:bg-amber-50'
-                            }`}
-                            title={highlight ? 'Remove highlight' : `Highlight in ${COLOR_CLASSES[activeHighlightColor].name}`}
-                          >
-                            <Highlighter className="w-3 h-3 text-amber-500" />
-                            <span>{highlight ? 'Unhighlight' : 'Highlight'}</span>
-                          </button>
-
-                          <span className="text-slate-300">|</span>
-
-                          <button
-                            onClick={() => {
-                              setInlineNoteTargetParagraph(inlineNoteTargetParagraph === pIdx ? null : pIdx);
-                            }}
-                            className="flex items-center gap-1 text-[10px] font-bold text-slate-700 hover:text-amber-800 hover:bg-amber-50 px-1.5 py-0.5 rounded transition-colors"
-                            title="Attach sticky note here"
-                          >
-                            <StickyNoteIcon className="w-3 h-3 text-yellow-500" />
-                            <span>Note</span>
-                          </button>
-                        </div>
-
-                        {/* Text Paragraph */}
+                      <div key={pIdx} className="relative group">
                         <p
                           onClick={() => {
                             if (isHighlightMode) {
-                              toggleHighlightLine(pIdx, paragraphText);
+                              toggleHighlightLine(pIdx, paragraph);
                             }
                           }}
-                          className={`text-sm leading-relaxed whitespace-pre-line ${
-                            isHighlightMode ? 'cursor-pointer hover:opacity-90 select-none' : ''
-                          }`}
+                          className={`p-2.5 rounded-lg transition-colors ${
+                            isHighlighted ? 'bg-amber-100/80 border-l-4 border-amber-500 font-medium' : ''
+                          } ${isHighlightMode ? 'cursor-pointer hover:bg-amber-50/60' : ''}`}
                         >
-                          {paragraphText}
+                          {paragraph}
                         </p>
-
-                        {/* Inline Note Creation Box */}
-                        {inlineNoteTargetParagraph === pIdx && (
-                          <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-300 shadow-xs space-y-2 animate-in fade-in">
-                            <div className="flex items-center justify-between text-xs text-amber-950 font-bold">
-                              <span className="flex items-center gap-1">
-                                <StickyNoteIcon className="w-3.5 h-3.5 text-amber-600" />
-                                Add note to this section:
-                              </span>
-                              <button
-                                onClick={() => setInlineNoteTargetParagraph(null)}
-                                className="text-amber-700 hover:text-amber-950 p-0.5"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                            <textarea
-                              value={inlineNoteText}
-                              onChange={e => setInlineNoteText(e.target.value)}
-                              placeholder="Type your study note or formula reminder here..."
-                              rows={2}
-                              className="w-full text-xs p-2.5 rounded-lg bg-white border border-amber-200 text-slate-900 focus:outline-hidden focus:border-amber-500 resize-none"
-                            />
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => setInlineNoteTargetParagraph(null)}
-                                className="px-2.5 py-1 text-xs text-slate-600 hover:text-slate-900"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (inlineNoteText.trim()) {
-                                    addStickyNote(inlineNoteText.trim(), activeHighlightColor, pIdx);
-                                    setInlineNoteText('');
-                                    setInlineNoteTargetParagraph(null);
-                                  }
-                                }}
-                                disabled={!inlineNoteText.trim()}
-                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-                              >
-                                Save Note
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Paragraph's Attached Sticky Notes */}
-                        {paragraphNotes.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap gap-2">
-                            {paragraphNotes.map(pn => (
-                              <div
-                                key={pn.id}
-                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs shadow-2xs ${COLOR_CLASSES[pn.color].bg} ${COLOR_CLASSES[pn.color].border}`}
-                              >
-                                <StickyNoteIcon className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                                <span className="font-semibold text-slate-800">{pn.text}</span>
-                                <button
-                                  onClick={() => deleteStickyNote(pn.id)}
-                                  className="text-slate-400 hover:text-red-600 ml-1 p-0.5"
-                                  title="Delete note"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
                 </div>
-
-                {/* Important Board Questions Section */}
-                {activeReaderMaterial.keyQuestions && activeReaderMaterial.keyQuestions.length > 0 && (
-                  <div className="mt-8 pt-6 border-t border-slate-200 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-amber-500" />
-                      <h3 className="text-lg font-bold text-slate-900">
-                        Important Board Examination Questions & Model Answers
-                      </h3>
-                    </div>
-                    <div className="space-y-3">
-                      {activeReaderMaterial.keyQuestions.map((kq, idx) => (
-                        <div key={idx} className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/80 space-y-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="font-semibold text-slate-900 text-sm">
-                              Q{idx + 1}. {kq.question}
-                            </p>
-                            <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-200 text-amber-900 rounded shrink-0">
-                              {kq.marks} Marks
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-700 leading-relaxed pl-3 border-l-2 border-amber-400">
-                            <strong className="text-slate-900">Model Answer:</strong> {kq.answer}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-
-              {/* Collapsible Sticky Notes Drawer */}
-              <StickyNotesDrawer
-                notes={currentStickyNotes}
-                isOpen={isNotesDrawerOpen}
-                onClose={() => setIsNotesDrawerOpen(false)}
-                onDeleteNote={deleteStickyNote}
-                onAddNote={(text, color) => addStickyNote(text, color)}
-              />
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-              <div className="flex items-center gap-3">
-                <span>Curated by Mr. Zakir Hussain • CBSE Information Technology</span>
-                {(currentHighlights.length > 0 || currentStickyNotes.length > 0) && (
-                  <span className="text-slate-400 hidden sm:inline">
-                    • Annotations automatically saved to your browser
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  setActiveReaderMaterial(null);
-                  if (onClearInitialMaterial) onClearInitialMaterial();
-                }}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold cursor-pointer"
-              >
-                Close Reader
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Upload Chapter PDF Modal */}
+      {/* Chapter PDF Uploader Modal */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-6">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-blue-400" />
-                <span className="text-sm font-bold">Upload Chapter PDF Document</span>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 p-6">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 text-lg">Upload Chapter PDF & Notes</h3>
               <button
                 onClick={() => setIsUploadModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 sm:p-6">
-              <ChapterPdfUploader 
-                onSuccess={() => setIsUploadModalOpen(false)} 
-                defaultClass={activeClass === 'ALL' ? 'X' : activeClass}
-                defaultSubject={activeSubject === 'ALL' ? 'it-402' : activeSubject}
-              />
-            </div>
+            <ChapterPdfUploader
+              onSuccess={() => setIsUploadModalOpen(false)}
+            />
           </div>
         </div>
+      )}
+
+      {/* AI PDF MCQ Extractor Modal */}
+      {showPdfExtractor && (
+        <PdfMcqExtractorModal
+          isOpen={showPdfExtractor}
+          onClose={() => setShowPdfExtractor(false)}
+          defaultClass={activeClass !== 'ALL' ? activeClass : 'X'}
+          defaultSubject={activeSubject !== 'ALL' ? activeSubject : 'it-402'}
+          onStartQuizWithExtracted={(quiz) => {
+            setShowPdfExtractor(false);
+            if (onStartQuiz) {
+              onStartQuiz(quiz);
+            }
+          }}
+        />
+      )}
+
+      {/* PYQ Paper Viewer Modal */}
+      {selectedPyqPaper && (
+        <PYQPdfViewerModal
+          paper={selectedPyqPaper}
+          onClose={() => setSelectedPyqPaper(null)}
+        />
       )}
     </div>
   );

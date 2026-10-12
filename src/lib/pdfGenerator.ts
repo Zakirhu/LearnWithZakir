@@ -137,7 +137,7 @@ export const buildChapterPDFDocument = (material: StudyMaterial): string => {
         <td style="vertical-align:middle;">
           <h1 class="logo-text">ZAKIR LEARNING HUB</h1>
           <p style="margin:2px 0 0 0; font-size:11.5px; color:#475569;">
-            CBSE Skill Education • Information Technology Curriculum
+            Computer Science & Information Technology Curriculum
           </p>
         </td>
         <td style="text-align:right; vertical-align:middle;">
@@ -184,7 +184,7 @@ export const buildChapterPDFDocument = (material: StudyMaterial): string => {
     <div class="footer-section">
       <div>
         <p style="margin:0; font-size:11px; color:#64748b;">
-          Source: <strong>CBSESkillEducation.com / Information Technology</strong>
+          Curriculum Track: <strong>Computer Science & Information Technology</strong>
         </p>
         <p style="margin:2px 0 0 0; font-size:10px; color:#94a3b8;">
           Document ID: ${material.id} • Zakir Learning Hub Portal

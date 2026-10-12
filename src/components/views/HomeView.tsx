@@ -13,11 +13,7 @@ import {
   Flame,
   Check,
   Sparkles,
-  BarChart3,
   Award,
-  Terminal,
-  FileCheck2,
-  FileText,
   Upload
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -25,6 +21,9 @@ import { ClassLevel, StudyMaterial, QuizConfig } from '../../types';
 import { SEO } from '../SEO';
 import { Logo } from '../Logo';
 import { PdfMcqExtractorModal } from '../PdfMcqExtractorModal';
+import { KineticHeading } from '../motion/KineticText';
+import { WordRotator } from '../motion/WordRotator';
+import { FadeIn, StaggerContainer, StaggerItem } from '../motion/MotionFade';
 
 interface HomeViewProps {
   setCurrentTab: (tab: string) => void;
@@ -102,7 +101,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         keywords={['Zakir Learning Hub', 'CBSE Computer Science', 'IT 402', 'IP 065', 'Typography 817', 'Zakir Hussain', 'Class 10 IT', 'Class 12 IP']}
       />
       {/* 1. HERO SECTION */}
-      <section className="relative overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-24 bg-gradient-to-b from-blue-50/70 via-slate-50 to-white border-b border-slate-200">
+      <section className="relative overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-24 bg-gradient-to-b from-teal-50/60 via-slate-50 to-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
           
           {/* Official Emblem Logo */}
@@ -110,58 +109,77 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Logo className="w-24 h-24 sm:w-28 sm:h-28 drop-shadow-md hover:scale-105 transition-transform" />
           </div>
 
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-100/90 text-blue-800 rounded-full text-xs font-semibold">
-            <Flame className="w-3.5 h-3.5 text-blue-600" />
-            <span>Computer Science & IT Learning Hub • Classes VI–XII</span>
+          <div className="flex items-center justify-center gap-2 text-xs font-bold text-teal-800 uppercase tracking-widest">
+            <Flame className="w-3.5 h-3.5 text-teal-600" />
+            <span>Computer Science & IT Learning Hub</span>
+            <span aria-hidden="true" className="text-slate-300">·</span>
+            <span>Classes VI–XII</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto text-balance">
-            Learn. Practice. Master. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600">
-              Computer Science & IT with Confidence.
-            </span>
-          </h1>
+          <div className="space-y-3">
+            <KineticHeading
+              text="Learn. Practice. Master."
+              className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto font-heading"
+            />
+            <div className="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-800 font-heading flex flex-wrap items-center justify-center gap-2">
+              <span className="text-slate-800">Explore</span>
+              <WordRotator
+                words={[
+                  'Computer Science',
+                  'IT Code 402',
+                  'IP Code 065',
+                  'Python & Pandas',
+                  'MySQL Databases',
+                  'Typography 817'
+                ]}
+                className="text-transparent bg-clip-text bg-gradient-to-r from-teal-700 via-sky-700 to-indigo-800"
+              />
+              <span className="text-slate-800">with Confidence.</span>
+            </div>
+          </div>
 
-          <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
-            Class VI–XII study material, chapter-wise notes, practical resources, MCQs and online tests — created and curated by <strong className="text-slate-900 font-bold">Zakir Hussain</strong>.
-          </p>
+          <FadeIn delay={0.15}>
+            <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
+              Class VI–XII study material, chapter-wise notes, practical resources, MCQs and online tests — created and curated by <strong className="text-slate-900 font-bold">Zakir Hussain</strong>.
+            </p>
+          </FadeIn>
 
           {/* Three Hero Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <FadeIn delay={0.25} className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
-              onClick={() => setCurrentTab('materials')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-500/25 transition-all cursor-pointer hover:scale-102"
+              onClick={() => setCurrentTab('lms')}
+              className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-semibold text-sm shadow-lg shadow-teal-700/20 transition-all cursor-pointer hover:scale-102"
             >
               <BookOpen className="w-4 h-4" />
-              <span>Explore Study Material</span>
+              <span>Explore Chapter LMS</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <button
               onClick={() => setCurrentTab('quiz')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-sm border border-slate-300 shadow-sm transition-all cursor-pointer hover:scale-102"
+              className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold text-sm shadow-md shadow-amber-500/20 transition-all cursor-pointer hover:scale-102"
             >
-              <Zap className="w-4 h-4 text-amber-500" />
+              <Zap className="w-4 h-4 text-slate-950" />
               <span>Take a Quiz</span>
             </button>
 
             <button
               onClick={() => setCurrentTab('qbank')}
-              className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 text-slate-700 font-semibold text-sm transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 text-slate-800 font-semibold text-sm border border-slate-200 transition-colors cursor-pointer"
             >
-              <HelpCircle className="w-4 h-4 text-indigo-600" />
+              <HelpCircle className="w-4 h-4 text-teal-700" />
               <span>Browse Question Bank</span>
             </button>
-          </div>
+          </FadeIn>
 
           {/* Personal Identity Line */}
           <div className="pt-4 text-xs text-slate-600 flex flex-wrap items-center justify-center gap-2">
             <span className="font-bold text-slate-900">Created & curated by Zakir Hussain</span>
-            <span className="text-slate-400">•</span>
+            <span className="text-slate-300" aria-hidden="true">·</span>
             <span>PGT Computer Science</span>
-            <span className="text-slate-400">•</span>
+            <span className="text-slate-300" aria-hidden="true">·</span>
             <span>Educator</span>
-            <span className="text-slate-400">•</span>
+            <span className="text-slate-300" aria-hidden="true">·</span>
             <span>Technology Enthusiast</span>
           </div>
 
@@ -191,8 +209,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* 2. SELECT YOUR CLASS */}
       <section id="classes-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-8 space-y-1">
-          <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Targeted Curriculum</span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+          <span className="text-xs font-bold text-teal-700 uppercase tracking-widest">Targeted Curriculum</span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
             Select Your Class
           </h2>
           <p className="text-sm text-slate-500">
@@ -200,40 +218,41 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
+        <StaggerContainer className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
           {classCards.map(cls => (
-            <div
-              key={cls.level}
-              onClick={() => {
-                setSelectedClassFilter(cls.level);
-                setCurrentTab('materials');
-              }}
-              className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-blue-400 hover:-translate-y-1 transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-blue-50 group-hover:bg-blue-600 text-blue-700 group-hover:text-white flex items-center justify-center font-extrabold text-base transition-colors mb-3">
-                  {cls.level}
+            <StaggerItem key={cls.level}>
+              <div
+                onClick={() => {
+                  setSelectedClassFilter(cls.level);
+                  setCurrentTab('lms');
+                }}
+                className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-teal-500 hover:-translate-y-1 transition-all cursor-pointer group flex flex-col justify-between h-full"
+              >
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-teal-50 group-hover:bg-teal-700 text-teal-800 group-hover:text-white flex items-center justify-center font-extrabold text-base transition-colors mb-3">
+                    {cls.level}
+                  </div>
+                  <h3 className="font-bold text-slate-900 group-hover:text-teal-700 transition-colors text-sm font-heading">
+                    {cls.name}
+                  </h3>
+                  <p className="text-xs text-slate-700 font-medium mt-1 leading-snug">
+                    {cls.topic}
+                  </p>
                 </div>
-                <h3 className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors text-sm">
-                  {cls.name}
-                </h3>
-                <p className="text-xs text-slate-700 font-medium mt-1 leading-snug">
-                  {cls.topic}
-                </p>
-              </div>
 
-              <div className="mt-4 pt-2.5 border-t border-slate-100 space-y-2">
-                <span className="text-[10px] text-slate-500 font-medium block">
-                  {cls.stats}
-                </span>
-                <div className="flex items-center justify-between text-[11px] text-blue-600 font-semibold group-hover:translate-x-0.5 transition-transform">
-                  <span>Open Class</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                <div className="mt-4 pt-2.5 border-t border-slate-100 space-y-2">
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    {cls.stats}
+                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-teal-700 font-semibold group-hover:translate-x-0.5 transition-transform">
+                    <span>Open Class</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
                 </div>
               </div>
-            </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerContainer>
       </section>
 
       {/* 3. EXPLORE SUBJECTS (3 Large Professional Cards) */}
@@ -284,7 +303,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               onClick={() => {
                 setSelectedClassFilter('X');
-                setCurrentTab('materials');
+                setCurrentTab('lms');
               }}
               className="w-full py-3 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
             >
@@ -326,7 +345,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               onClick={() => {
                 setSelectedClassFilter('XII');
-                setCurrentTab('materials');
+                setCurrentTab('lms');
               }}
               className="w-full py-3 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
             >
@@ -368,7 +387,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               onClick={() => {
                 setSelectedClassFilter('XII');
-                setCurrentTab('materials');
+                setCurrentTab('lms');
               }}
               className="w-full py-3 bg-purple-50 hover:bg-purple-600 hover:text-white text-purple-700 rounded-xl text-xs font-bold transition-all text-center cursor-pointer"
             >
@@ -443,257 +462,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </p>
           </div>
 
-        </div>
-      </section>
-
-      {/* 4.5. INTERACTIVE PRACTICAL PLAYGROUNDS & CBSE BOARD HUB */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-          <div className="relative z-10 max-w-3xl space-y-2 mb-8">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              <span>CBSE Practical Playgrounds & Exam Excellence</span>
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Practical Playgrounds & CBSE Board Hub
-            </h2>
-            <p className="text-xs sm:text-sm text-blue-200 leading-relaxed">
-              50% of CBSE Computer Science, IT 402, IP 065, and Typography 817 marks are earned in practical and competency questions. Practice live in your browser without complex software installations.
-            </p>
-          </div>
-
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            
-            {/* Card 1: SQL & Python Playground */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/30 text-blue-300 flex items-center justify-center font-bold">
-                    <Terminal className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    50% Practical Marks
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">In-Browser SQL & Python Sandbox</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Execute real SELECT, WHERE, GROUP BY, and HAVING queries on pre-loaded Student, Employee, and Orders tables. Visualize Pandas Series and DataFrames (.loc, .iloc, stats).
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('lab');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>Launch Practical Lab</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 2: Typing Speed & Accuracy Lab */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/30 text-amber-300 flex items-center justify-center font-bold">
-                    <Keyboard className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Typography Code 817
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Touch Typing Speed & Accuracy Lab</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Live gross words per minute (GWPM), real-time accuracy %, and backspace counter with official CBSE business correspondence and memorandum texts.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('lab');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>Start Typing Test</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 3: CBSE Blueprint & Weightage */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/30 text-purple-300 flex items-center justify-center font-bold">
-                    <BarChart3 className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Weightage Roadmap
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Board Blueprint & Unit Weightage</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Visual progress bars showing Part A (10M), Part B (40M), and Part C (50M Practicals) with High-Yield chapter tags to prioritize revision time effectively.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('blueprint');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>Explore Blueprint</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 4: Competency & Case Studies */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/30 text-emerald-300 flex items-center justify-center font-bold">
-                    <FileCheck2 className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    50%+ Board Pattern
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Competency-Based Questions (CBQs)</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Assertion-Reasoning drills and real-world scenario case questions (mail merge, network topology, SQL data recovery) with official model answers and marking tips.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('competency');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>Practice CBQs</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 5: Flashcards & Morning Cheats */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-rose-500/30 text-rose-300 flex items-center justify-center font-bold">
-                    <Zap className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                    60-Sec Revision
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Flashcards & Exam Morning Cheats</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Interactive flip cards for LibreOffice shortcuts, SQL command syntax, networking protocols (TCP/IP, DNS, IPv4 vs IPv6), and cyber laws (IT Act 2000).
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('flashcards');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>Open Flashcards</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 6: PYQ Archive & Step Marking */}
-            <div className="p-5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 transition-all flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/30 text-sky-300 flex items-center justify-center font-bold">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                    Past 5 Years
-                  </span>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">PYQ Archive & Official Step Marking</h3>
-                  <p className="text-xs text-blue-100/80 mt-1 leading-relaxed">
-                    Structured past 5 years CBSE board papers with official examiner model answer keys and step-marking guidelines to understand how examiners award points.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCurrentTab('pyq');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <span>View Board Papers</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Card 7: AI PDF MCQ Extractor */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-900/60 to-purple-900/50 hover:from-indigo-900/80 hover:to-purple-900/70 border border-purple-400/30 transition-all flex flex-col justify-between space-y-4 md:col-span-2 lg:col-span-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div className="w-11 h-11 rounded-2xl bg-purple-500/30 text-purple-300 border border-purple-400/30 flex items-center justify-center font-bold shrink-0">
-                    <Sparkles className="w-6 h-6 text-purple-300 animate-pulse" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/40 uppercase tracking-wider">
-                        Gemini 3.8 Flash AI
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        Zero Setup • Instant
-                      </span>
-                    </div>
-                    <h3 className="text-base sm:text-lg font-bold text-white">
-                      AI PDF to MCQ Extractor & Generator
-                    </h3>
-                    <p className="text-xs sm:text-sm text-purple-100/80 mt-1 max-w-3xl leading-relaxed">
-                      Upload school assignments, question papers, notes, or chapter textbook PDFs. The AI instantly parses the pages, extracts question items, formulates 4 verified answer options, and outputs board-standard MCQs directly into your study and quiz portal.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex sm:flex-col gap-2 shrink-0">
-                  <button
-                    onClick={() => setShowPdfExtractor(true)}
-                    className="flex-1 sm:flex-none py-2.5 px-5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-purple-900/50"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Upload PDF Now</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCurrentTab('qbank');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="flex-1 sm:flex-none py-2.5 px-4 bg-white/10 hover:bg-white/20 text-purple-200 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>View Question Bank</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
         </div>
       </section>
 
