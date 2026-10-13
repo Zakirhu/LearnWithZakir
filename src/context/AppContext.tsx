@@ -29,12 +29,39 @@ import { INITIAL_LAB_EXAMS, INITIAL_LAB_SESSIONS } from '../data/seedLabExams';
 import { CLASSES_LIST, SUBJECTS_LIST, CHAPTERS_DATA } from '../data/curriculumData';
 import { 
   syncProfileToSupabase, 
+  deleteProfileFromSupabase,
+  fetchProfilesFromSupabase,
   saveQuizAttemptToSupabase, 
+  fetchQuizAttemptsFromSupabase,
   submitDoubtToSupabase,
+  updateDoubtReplyInSupabase,
+  fetchDoubtsFromSupabase,
   logUserLoginToSupabase,
   bulkSyncStudentsToSupabase,
   sendPasswordResetEmail,
-  updateSupabasePassword
+  updateSupabasePassword,
+  savePdfChapterToSupabase,
+  fetchPdfChaptersFromSupabase,
+  saveLearningResourceToSupabase,
+  deleteLearningResourceFromSupabase,
+  fetchLearningResourcesFromSupabase,
+  saveStudyMaterialToSupabase,
+  deleteStudyMaterialFromSupabase,
+  fetchStudyMaterialsFromSupabase,
+  saveQuizToSupabase,
+  deleteQuizFromSupabase,
+  fetchQuizzesFromSupabase,
+  saveQuestionToSupabase,
+  deleteQuestionFromSupabase,
+  fetchQuestionsFromSupabase,
+  saveLabExamToSupabase,
+  deleteLabExamFromSupabase,
+  fetchLabExamsFromSupabase,
+  saveLabExamSessionToSupabase,
+  fetchLabExamSessionsFromSupabase,
+  saveSiteStoreItem,
+  fetchSiteStoreItem,
+  syncAllAppDataToSupabase
 } from '../lib/supabase';
 
 export interface AuthSuccessCallback {
@@ -400,13 +427,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(key, JSON.stringify(data));
     } catch (err) {
       console.warn(`LocalStorage quota exceeded for ${key}:`, err);
-      if (key === 'zakir_study_materials' && Array.isArray(data)) {
+      if ((key === 'zakir_study_materials' || key === 'zakir_learning_resources') && Array.isArray(data)) {
         try {
-          // Fallback: store lightweight study materials without heavy base64 pdfDataUrl strings in localStorage
-          const lightweight = data.map((m: any) => ({ ...m, pdfDataUrl: undefined }));
+          // Fallback: store lightweight items without heavy base64 url strings in localStorage
+          const lightweight = data.map((m: any) => ({ 
+            ...m, 
+            pdfDataUrl: m.pdfDataUrl && m.pdfDataUrl.length > 50000 ? undefined : m.pdfDataUrl,
+            fileUrl: m.fileUrl && m.fileUrl.length > 50000 ? undefined : m.fileUrl
+          }));
           localStorage.setItem(key, JSON.stringify(lightweight));
         } catch (e2) {
           console.warn('Lightweight storage fallback failed:', e2);
+          try {
+            const ultraLight = data.map((m: any) => ({ ...m, pdfDataUrl: undefined, fileUrl: undefined }));
+            localStorage.setItem(key, JSON.stringify(ultraLight));
+          } catch {}
         }
       }
     }
@@ -489,8 +524,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     safeLocalStorageSet('zakir_lab_sessions', labExamSessions);
   }, [labExamSessions]);
 
-  // Initial fetch from backend database store (/api/admin/store)
+  // Initial fetch from Supabase database tables and backend store (/api/admin/store)
   useEffect(() => {
+    // 1. Fetch from local backend store if available
     fetch('/api/admin/store')
       .then(res => res.json())
       .then(json => {
@@ -507,6 +543,180 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       })
       .catch(() => {});
+
+    // 2. Comprehensive fetch from Supabase Database
+    const loadSupabaseData = async () => {
+      try {
+        // A. Learning Resources
+        const [supResources, supChapters] = await Promise.all([
+          fetchLearningResourcesFromSupabase(),
+          fetchPdfChaptersFromSupabase()
+        ]);
+
+        const combinedResources: LearningResource[] = [];
+        if (Array.isArray(supResources) && supResources.length > 0) {
+          combinedResources.push(...supResources);
+        }
+
+        if (Array.isArray(supChapters) && supChapters.length > 0) {
+          const mappedChapters: LearningResource[] = supChapters.map((sc: any) => ({
+            id: sc.id || `res-sup-${Math.random()}`,
+            title: sc.file_name ? sc.file_name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ') : sc.chapter_title,
+            description: `Official chapter material: ${sc.chapter_title}`,
+            resourceType: 'notes',
+            classLevel: sc.class_level as ClassLevel,
+            subjectId: sc.subject_id as SubjectId,
+            chapterId: `ch-${sc.class_level}-${sc.subject_id}`,
+            chapterTitle: sc.chapter_title,
+            published: true,
+            author: 'Zakir Hussain',
+            content: `# ${sc.file_name}\n\nOfficial PDF material for ${sc.chapter_title} (Class ${sc.class_level}).`,
+            fileName: sc.file_name,
+            fileSize: '2.4 MB',
+            fileUrl: sc.pdf_data_url || '',
+            pageCount: 12,
+            uploadedDate: sc.created_at ? sc.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            order: 99
+          }));
+
+          const existingIds = new Set(combinedResources.map(r => r.id));
+          for (const mc of mappedChapters) {
+            if (!existingIds.has(mc.id)) {
+              combinedResources.push(mc);
+            }
+          }
+        }
+
+        if (combinedResources.length > 0) {
+          setLearningResources(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = combinedResources.filter(r => !existingIds.has(r.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // B. Study Materials
+        const supMaterials = await fetchStudyMaterialsFromSupabase();
+        if (Array.isArray(supMaterials) && supMaterials.length > 0) {
+          setStudyMaterials(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = supMaterials.filter(m => !existingIds.has(m.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // C. Quizzes
+        const supQuizzes = await fetchQuizzesFromSupabase();
+        if (Array.isArray(supQuizzes) && supQuizzes.length > 0) {
+          setQuizzes(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = supQuizzes.filter(q => !existingIds.has(q.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // D. Question Bank
+        const supQuestions = await fetchQuestionsFromSupabase();
+        if (Array.isArray(supQuestions) && supQuestions.length > 0) {
+          setQuestionBank(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = supQuestions.filter(q => !existingIds.has(q.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // E. Quiz Attempts
+        const supAttempts = await fetchQuizAttemptsFromSupabase();
+        if (Array.isArray(supAttempts) && supAttempts.length > 0) {
+          setQuizAttempts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = supAttempts.filter(a => !existingIds.has(a.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // F. Doubts
+        const supDoubts = await fetchDoubtsFromSupabase();
+        if (Array.isArray(supDoubts) && supDoubts.length > 0) {
+          setDoubts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const uniqueNew = supDoubts.filter(d => !existingIds.has(d.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // G. Profiles (Registered Students)
+        const supProfiles = await fetchProfilesFromSupabase();
+        if (Array.isArray(supProfiles) && supProfiles.length > 0) {
+          const loadedStudents: UserAccount[] = supProfiles.map((p: any) => ({
+            id: p.id || `usr-${p.email}`,
+            name: p.name || 'Student',
+            email: p.email,
+            username: p.username || p.email.split('@')[0],
+            studentId: p.student_id || `STD-${p.class_level || 'X'}-1001`,
+            rollNumber: p.roll_number || '1001',
+            classLevel: (p.class_level || 'X') as ClassLevel,
+            role: (p.role || 'student') as 'student' | 'admin',
+            avatarSeed: p.avatar_seed || p.name,
+            schoolName: p.school_name || 'Zakir Learning Hub Partner School',
+            targetExamYear: p.target_exam_year || '2026',
+            password: 'Student@123',
+            isActive: true,
+            createdAt: p.updated_at
+          }));
+
+          setRegisteredStudents(prev => {
+            const existingEmails = new Set(prev.map(s => s.email.toLowerCase()));
+            const uniqueNew = loadedStudents.filter(s => !existingEmails.has(s.email.toLowerCase()));
+            return [...prev, ...uniqueNew];
+          });
+        }
+
+        // H. Lab Exams & Sessions
+        const [supExams, supSessions] = await Promise.all([
+          fetchLabExamsFromSupabase(),
+          fetchLabExamSessionsFromSupabase()
+        ]);
+        if (Array.isArray(supExams) && supExams.length > 0) {
+          setLabExams(prev => {
+            const existingIds = new Set(prev.map(e => e.id));
+            const uniqueNew = supExams.filter(e => !existingIds.has(e.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+        if (Array.isArray(supSessions) && supSessions.length > 0) {
+          setLabExamSessions(prev => {
+            const existingIds = new Set(prev.map(s => s.id));
+            const uniqueNew = supSessions.filter(s => !existingIds.has(s.id));
+            return [...uniqueNew, ...prev];
+          });
+        }
+
+        // I. Curriculum and site metadata from site_store
+        const siteCurriculum = await fetchSiteStoreItem('curriculum');
+        if (siteCurriculum) {
+          if (Array.isArray(siteCurriculum.classes) && siteCurriculum.classes.length > 0) {
+            setCustomClasses(siteCurriculum.classes);
+          }
+          if (Array.isArray(siteCurriculum.subjects) && siteCurriculum.subjects.length > 0) {
+            setCustomSubjects(siteCurriculum.subjects);
+          }
+          if (Array.isArray(siteCurriculum.chapters) && siteCurriculum.chapters.length > 0) {
+            setCustomChapters(siteCurriculum.chapters);
+          }
+          if (Array.isArray(siteCurriculum.academicSessions) && siteCurriculum.academicSessions.length > 0) {
+            setAcademicSessions(siteCurriculum.academicSessions);
+          }
+          if (Array.isArray(siteCurriculum.pyqPapers) && siteCurriculum.pyqPapers.length > 0) {
+            setPyqPapers(siteCurriculum.pyqPapers);
+          }
+        }
+      } catch (loadErr) {
+        console.warn('Supabase initial fetch notice:', loadErr);
+      }
+    };
+
+    loadSupabaseData();
   }, []);
 
   // Real-time Quiz & Test Synchronization Listener (WebSocket + BroadcastChannel + Storage Event)
@@ -936,14 +1146,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       s.studentId?.toLowerCase() !== studentIdOrEmail.toLowerCase() &&
       s.id !== studentIdOrEmail
     ));
+    deleteProfileFromSupabase(studentIdOrEmail);
   };
 
   const updateStudent = (id: string, updates: Partial<UserAccount>) => {
-    setRegisteredStudents(prev => prev.map(s => (s.id === id || s.email === id || s.studentId === id) ? { ...s, ...updates } : s));
+    setRegisteredStudents(prev => prev.map(s => {
+      if (s.id === id || s.email === id || s.studentId === id) {
+        const updated = { ...s, ...updates };
+        syncProfileToSupabase({
+          id: updated.id,
+          name: updated.name,
+          username: updated.username,
+          email: updated.email,
+          studentId: updated.studentId,
+          rollNumber: updated.rollNumber,
+          classLevel: updated.classLevel,
+          section: updated.section,
+          schoolName: updated.schoolName,
+          targetExamYear: updated.targetExamYear || '2026',
+          avatarSeed: updated.avatarSeed || updated.name,
+          enrolledSubjects: updated.enrolledSubjects || ['it-402'],
+          bookmarks: [],
+          bookmarkedQuestions: [],
+          badges: []
+        });
+        return updated;
+      }
+      return s;
+    }));
   };
 
   const toggleStudentLock = (id: string) => {
-    setRegisteredStudents(prev => prev.map(s => (s.id === id || s.email === id || s.studentId === id) ? { ...s, isLocked: !(s as any).isLocked } : s));
+    setRegisteredStudents(prev => prev.map(s => {
+      if (s.id === id || s.email === id || s.studentId === id) {
+        const updated = { ...s, isLocked: !(s as any).isLocked };
+        syncProfileToSupabase({
+          id: updated.id,
+          name: updated.name,
+          username: updated.username,
+          email: updated.email,
+          studentId: updated.studentId,
+          rollNumber: updated.rollNumber,
+          classLevel: updated.classLevel,
+          section: updated.section,
+          schoolName: updated.schoolName,
+          targetExamYear: updated.targetExamYear || '2026',
+          avatarSeed: updated.avatarSeed || updated.name,
+          enrolledSubjects: updated.enrolledSubjects || ['it-402'],
+          bookmarks: [],
+          bookmarkedQuestions: [],
+          badges: []
+        });
+        return updated;
+      }
+      return s;
+    }));
   };
 
   // Academic Sessions Management
@@ -1058,6 +1315,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setLearningResources(prev => [...prev, newResource]);
 
+    // Save to Supabase (handles storage upload for PDFs & table upsert)
+    saveLearningResourceToSupabase(newResource);
+
     addNotification({
       title: `New Resource Added: ${newResource.title}`,
       message: `Available under ${newResource.chapterTitle || 'Chapter'} for Class ${newResource.classLevel}.`,
@@ -1070,17 +1330,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateLearningResource = (id: string, updates: Partial<LearningResource>) => {
-    setLearningResources(prev => prev.map(res => res.id === id ? { ...res, ...updates } : res));
+    setLearningResources(prev => prev.map(res => {
+      if (res.id === id) {
+        const updated = { ...res, ...updates };
+        saveLearningResourceToSupabase(updated);
+        return updated;
+      }
+      return res;
+    }));
   };
 
   const replaceResourceFile = (id: string, fileData: { fileName: string; fileSize?: string; fileUrl: string; pageCount?: number }) => {
-    setLearningResources(prev => prev.map(res => res.id === id ? {
-      ...res,
-      fileName: fileData.fileName,
-      fileSize: fileData.fileSize || res.fileSize,
-      fileUrl: fileData.fileUrl,
-      pageCount: fileData.pageCount || res.pageCount
-    } : res));
+    setLearningResources(prev => prev.map(res => {
+      if (res.id === id) {
+        const updated = {
+          ...res,
+          fileName: fileData.fileName,
+          fileSize: fileData.fileSize || res.fileSize,
+          fileUrl: fileData.fileUrl,
+          pageCount: fileData.pageCount || res.pageCount
+        };
+        saveLearningResourceToSupabase(updated);
+        return updated;
+      }
+      return res;
+    }));
   };
 
   const reorderLearningResources = (chapterId: string, fromIndex: number, toIndex: number) => {
@@ -1095,16 +1369,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reordered.splice(toIndex, 0, itemToMove);
       const reorderedWithUpdatedOrder = reordered.map((item, idx) => ({ ...item, order: idx + 1 }));
       const otherResources = prev.filter(r => r.chapterId !== chapterId);
-      return [...otherResources, ...reorderedWithUpdatedOrder];
+      const allUpdated = [...otherResources, ...reorderedWithUpdatedOrder];
+      reorderedWithUpdatedOrder.forEach(r => saveLearningResourceToSupabase(r));
+      return allUpdated;
     });
   };
 
   const togglePublishLearningResource = (id: string) => {
-    setLearningResources(prev => prev.map(res => res.id === id ? { ...res, published: !res.published } : res));
+    setLearningResources(prev => prev.map(res => {
+      if (res.id === id) {
+        const updated = { ...res, published: !res.published };
+        saveLearningResourceToSupabase(updated);
+        return updated;
+      }
+      return res;
+    }));
   };
 
   const deleteLearningResource = (id: string) => {
     setLearningResources(prev => prev.filter(res => res.id !== id));
+    deleteLearningResourceFromSupabase(id);
   };
 
   const getResourcesForChapter = (chapterId: string, includeUnpublished: boolean = false): LearningResource[] => {
@@ -1123,6 +1407,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setStudyMaterials(prev => [newMat, ...prev]);
 
+    saveStudyMaterialToSupabase(newMat);
+    if (newMat.pdfDataUrl) {
+      savePdfChapterToSupabase({
+        id: newMat.id,
+        fileName: newMat.downloadableFileName || `${newMat.title}.pdf`,
+        classLevel: newMat.classLevel,
+        subjectId: newMat.subjectId,
+        chapterTitle: newMat.chapterTitle,
+        questionCount: 0,
+        extractedQuestions: [],
+        pdfDataUrl: newMat.pdfDataUrl
+      });
+    }
+
     addNotification({
       title: `New Material Added for Class ${mat.classLevel}`,
       message: `${mat.title} (${mat.chapterTitle}) is now available.`,
@@ -1134,27 +1432,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudyMaterial = (id: string) => {
     setStudyMaterials(prev => prev.filter(m => m.id !== id));
+    deleteStudyMaterialFromSupabase(id);
   };
 
   const updateStudyMaterial = (id: string, updates: Partial<StudyMaterial>) => {
-    setStudyMaterials(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    setStudyMaterials(prev => prev.map(m => {
+      if (m.id === id) {
+        const updated = { ...m, ...updates };
+        saveStudyMaterialToSupabase(updated);
+        return updated;
+      }
+      return m;
+    }));
   };
 
   const replaceStudyMaterial = (id: string, newFileData: Partial<StudyMaterial>) => {
     setStudyMaterials(prev => prev.map(m => {
       if (m.id === id) {
-        return {
+        const updated = {
           ...m,
           ...newFileData,
           uploadedDate: new Date().toISOString().split('T')[0]
         };
+        saveStudyMaterialToSupabase(updated);
+        return updated;
       }
       return m;
     }));
   };
 
   const togglePublishMaterial = (id: string) => {
-    setStudyMaterials(prev => prev.map(m => m.id === id ? { ...m, published: !m.published } : m));
+    setStudyMaterials(prev => prev.map(m => {
+      if (m.id === id) {
+        const updated = { ...m, published: !m.published };
+        saveStudyMaterialToSupabase(updated);
+        return updated;
+      }
+      return m;
+    }));
   };
 
   // Questions
@@ -1165,18 +1480,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       published: true
     };
     setQuestionBank(prev => [newQ, ...prev]);
+    saveQuestionToSupabase(newQ);
   };
 
   const updateQuestion = (id: string, updates: Partial<Question>) => {
-    setQuestionBank(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
+    setQuestionBank(prev => prev.map(q => {
+      if (q.id === id) {
+        const updated = { ...q, ...updates };
+        saveQuestionToSupabase(updated);
+        return updated;
+      }
+      return q;
+    }));
   };
 
   const deleteQuestion = (id: string) => {
     setQuestionBank(prev => prev.filter(q => q.id !== id));
+    deleteQuestionFromSupabase(id);
   };
 
   const togglePublishQuestion = (id: string) => {
-    setQuestionBank(prev => prev.map(q => q.id === id ? { ...q, published: !q.published } : q));
+    setQuestionBank(prev => prev.map(q => {
+      if (q.id === id) {
+        const updated = { ...q, published: !q.published };
+        saveQuestionToSupabase(updated);
+        return updated;
+      }
+      return q;
+    }));
   };
 
   // Quizzes
@@ -1187,6 +1518,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       published: true
     };
     setQuizzes(prev => [newQuiz, ...prev]);
+    saveQuizToSupabase(newQuiz);
 
     addNotification({
       title: `⚡ Live Assessment Published: Class ${quiz.classLevel}`,
@@ -1219,10 +1551,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteQuiz = (id: string) => {
     setQuizzes(prev => prev.filter(q => q.id !== id));
+    deleteQuizFromSupabase(id);
   };
 
   const togglePublishQuiz = (id: string) => {
-    setQuizzes(prev => prev.map(q => q.id === id ? { ...q, published: !q.published } : q));
+    setQuizzes(prev => prev.map(q => {
+      if (q.id === id) {
+        const updated = { ...q, published: !q.published };
+        saveQuizToSupabase(updated);
+        return updated;
+      }
+      return q;
+    }));
   };
 
   // Attempts & Bookmarks
@@ -1287,6 +1627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const replyToDoubt = (id: string, reply: string) => {
     setDoubts(prev => prev.map(d => (d.id === id ? { ...d, reply, status: 'replied' } : d)));
+    updateDoubtReplyInSupabase(id, reply);
   };
 
   // Notifications
@@ -1332,14 +1673,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Computer Lab Online Examination Handlers
   const createLabExam = (exam: LabExamConfig) => {
     setLabExams(prev => [exam, ...prev.filter(e => e.id !== exam.id)]);
+    saveLabExamToSupabase(exam);
   };
 
   const updateLabExam = (id: string, updates: Partial<LabExamConfig>) => {
-    setLabExams(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    setLabExams(prev => prev.map(e => {
+      if (e.id === id) {
+        const updated = { ...e, ...updates };
+        saveLabExamToSupabase(updated);
+        return updated;
+      }
+      return e;
+    }));
   };
 
   const deleteLabExam = (id: string) => {
     setLabExams(prev => prev.filter(e => e.id !== id));
+    deleteLabExamFromSupabase(id);
   };
 
   const duplicateLabExam = (id: string): LabExamConfig | null => {
@@ -1433,9 +1783,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const percentage = Math.round((autoScore / totalMarks) * 100);
         const passed = autoScore >= exam.passingMarks;
 
-        return {
+        const updatedSession = {
           ...s,
-          status: 'submitted',
+          status: 'submitted' as const,
           submittedAt: now,
           autoScore,
           finalScore: autoScore,
@@ -1443,6 +1793,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           passed,
           isEvaluated: !exam.questions.some(q => q.type === 'short_answer' || q.type === 'long_answer' || q.type === 'practical_code')
         };
+        saveLabExamSessionToSupabase(updatedSession);
+        return updatedSession;
       }
       return s;
     }));
@@ -1475,7 +1827,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           changesNote: `Evaluated ${Object.keys(manualEvaluations).length} subjective questions (+${manualScore} marks). Total: ${finalScore}/${s.totalMarks}.`
         };
 
-        return {
+        const updatedSession = {
           ...s,
           manualEvaluations,
           manualScore,
@@ -1489,6 +1841,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           resultsReleased: options?.resultsReleased !== undefined ? options.resultsReleased : s.resultsReleased,
           evaluationHistory: [...(s.evaluationHistory || []), historyItem]
         };
+        saveLabExamSessionToSupabase(updatedSession);
+        return updatedSession;
       }
       return s;
     }));
@@ -1579,6 +1933,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           attempts: quizAttempts,
           labSessions: labExamSessions
         })
+      });
+    } catch {
+      // offline / local fallback
+    }
+
+    try {
+      await syncAllAppDataToSupabase({
+        classes: customClasses,
+        subjects: customSubjects,
+        chapters: customChapters,
+        learningResources,
+        studyMaterials,
+        questionBank,
+        quizzes,
+        tests: labExams,
+        students: registeredStudents,
+        attempts: quizAttempts,
+        doubts,
+        labSessions: labExamSessions,
+        academicSessions,
+        pyqPapers,
+        notifications
       });
     } catch {
       // offline / local fallback

@@ -52,7 +52,12 @@ import {
   Target,
   PieChart,
   Printer,
-  FileDown
+  FileDown,
+  Database,
+  Activity,
+  Server,
+  Globe,
+  UploadCloud
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { 
@@ -78,6 +83,13 @@ import { ChapterPdfUploader } from '../ChapterPdfUploader';
 import { PdfMcqExtractorModal } from '../PdfMcqExtractorModal';
 import { PYQPdfUploaderModal } from '../PYQPdfUploaderModal';
 import { LmsResourceFormModal } from '../lms/LmsResourceFormModal';
+import { 
+  testSupabaseConnection, 
+  isSupabaseConfigured, 
+  getSupabaseConfig, 
+  SupabaseTestResult,
+  syncAllAppDataToSupabase
+} from '../../lib/supabase';
 
 interface AdminPanelViewProps {
   onBackToHome?: () => void;
@@ -144,6 +156,11 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onBackToHome }) 
     evaluateLabExamSession,
     reopenLabExamForStudent,
     releaseExamResults,
+    quizzes,
+    doubts,
+    academicSessions,
+    pyqPapers,
+    notifications,
     syncStoreToBackend
   } = useApp();
 
@@ -157,6 +174,346 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onBackToHome }) 
     setTimeout(() => {
       setToast(null);
     }, 4000);
+  };
+
+  // Supabase Live Connectivity & Diagnostics State
+  const [supabaseTesting, setSupabaseTesting] = useState(false);
+  const [supabaseSyncing, setSupabaseSyncing] = useState(false);
+  const [supabaseTestResult, setSupabaseTestResult] = useState<SupabaseTestResult | null>(null);
+  const [showSqlModal, setShowSqlModal] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleTestSupabase = async () => {
+    setSupabaseTesting(true);
+    try {
+      const res = await testSupabaseConnection();
+      setSupabaseTestResult(res);
+      if (res.connected) {
+        showToast(`Supabase Connected! Ping: ${res.latencyMs}ms (${Object.values(res.tables).filter(t => t.ok).length}/12 tables)`, 'success');
+      } else {
+        showToast(res.message || 'Supabase check failed.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Error executing Supabase test.', 'error');
+    } finally {
+      setSupabaseTesting(false);
+    }
+  };
+
+  const handleSyncAllToSupabase = async () => {
+    setSupabaseSyncing(true);
+    try {
+      const res = await syncAllAppDataToSupabase({
+        classes: customClasses,
+        subjects: customSubjects,
+        chapters: customChapters,
+        learningResources,
+        studyMaterials,
+        questionBank,
+        quizzes,
+        tests: labExams,
+        students: registeredStudents,
+        attempts: quizAttempts,
+        doubts,
+        labSessions: labExamSessions,
+        academicSessions,
+        pyqPapers,
+        notifications
+      });
+      if (res.success) {
+        showToast(res.message, 'success');
+        const refreshed = await testSupabaseConnection();
+        setSupabaseTestResult(refreshed);
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save all data to Supabase.', 'error');
+    } finally {
+      setSupabaseSyncing(false);
+    }
+  };
+
+  const fullSupabaseSqlScript = `-- ====================================================================
+-- LEARN WITH ZAKIR - COMPLETE SUPABASE DATABASE PERSISTENCE SCHEMA
+-- Run this entire script in Supabase SQL Editor (SQL Editor -> New Query)
+-- ====================================================================
+
+-- 1. Create pdf_chapters table for uploaded chapter resources and MCQs
+create table if not exists public.pdf_chapters (
+    id text primary key,
+    file_name text not null,
+    class_level text not null,
+    subject_id text not null,
+    chapter_title text not null,
+    question_count integer default 0,
+    extracted_questions jsonb default '[]'::jsonb,
+    pdf_data_url text,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. Create learning_resources table (All LMS chapter resources, notes, assignments)
+create table if not exists public.learning_resources (
+    id text primary key,
+    title text not null,
+    description text default '',
+    resource_type text not null,
+    class_level text not null,
+    subject_id text not null,
+    chapter_id text not null,
+    chapter_title text default '',
+    published boolean default true,
+    uploaded_date text,
+    "order" integer default 1,
+    file_name text,
+    file_size text,
+    file_url text,
+    page_count integer,
+    content text,
+    qa_items jsonb default '[]'::jsonb,
+    mcq_items jsonb default '[]'::jsonb,
+    test_duration_minutes integer,
+    total_marks integer,
+    passing_marks integer,
+    author text default 'Zakir Hussain',
+    tags jsonb default '[]'::jsonb,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3. Create study_materials table
+create table if not exists public.study_materials (
+    id text primary key,
+    class_level text not null,
+    subject_id text not null,
+    chapter_id text not null,
+    chapter_title text not null,
+    title text not null,
+    type text not null,
+    description text default '',
+    read_time_minutes integer default 5,
+    uploaded_date text,
+    author text default 'Zakir Hussain',
+    content text default '',
+    downloadable_file_name text,
+    pdf_data_url text,
+    tags jsonb default '[]'::jsonb,
+    published boolean default true,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 4. Create quizzes table
+create table if not exists public.quizzes (
+    id text primary key,
+    title text not null,
+    class_level text not null,
+    subject_id text not null,
+    chapter_id text,
+    chapter_title text,
+    mode text default 'practice',
+    time_limit_minutes integer default 15,
+    total_marks integer default 20,
+    questions_count integer default 10,
+    difficulty text default 'all',
+    questions jsonb default '[]'::jsonb,
+    description text default '',
+    published boolean default true,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 5. Create question_bank table
+create table if not exists public.question_bank (
+    id text primary key,
+    class_level text not null,
+    subject_id text not null,
+    chapter_id text not null,
+    chapter_title text not null,
+    question text not null,
+    type text default 'mcq',
+    difficulty text default 'medium',
+    marks integer default 1,
+    options jsonb default '[]'::jsonb,
+    correct_option_index integer default 0,
+    correct_answer_text text,
+    explanation text default '',
+    published boolean default true,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6. Create quiz_attempts table
+create table if not exists public.quiz_attempts (
+    id text primary key,
+    user_email text,
+    student_id text,
+    quiz_id text,
+    quiz_title text,
+    class_level text,
+    subject_id text,
+    chapter_title text,
+    mode text,
+    score integer,
+    total_marks integer,
+    percentage numeric,
+    time_spent_seconds integer,
+    total_questions integer,
+    correct_answers_count integer,
+    user_answers jsonb default '{}'::jsonb,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 7. Create doubt_queries table
+create table if not exists public.doubt_queries (
+    id text primary key,
+    student_name text,
+    student_class text,
+    subject text,
+    topic text,
+    query text,
+    status text default 'pending',
+    reply text,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 8. Create user_logins audit table
+create table if not exists public.user_logins (
+    id serial primary key,
+    user_id text,
+    email text,
+    name text,
+    role text,
+    class_level text,
+    login_time timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 9. Create profiles table (Student & Admin Accounts)
+create table if not exists public.profiles (
+    email text primary key,
+    name text,
+    class_level text,
+    student_id text,
+    school_name text,
+    target_exam_year text,
+    avatar_seed text,
+    role text default 'student',
+    enrolled_subjects jsonb default '[]'::jsonb,
+    bookmarks jsonb default '[]'::jsonb,
+    bookmarked_questions jsonb default '[]'::jsonb,
+    badges jsonb default '[]'::jsonb,
+    updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 10. Create lab_exams table (Online Computer Lab Examination System)
+create table if not exists public.lab_exams (
+    id text primary key,
+    title text not null,
+    exam_code text not null,
+    class_level text not null,
+    subject_id text not null,
+    academic_session_id text,
+    duration_minutes integer default 45,
+    total_marks integer default 25,
+    passing_marks integer default 10,
+    status text default 'published',
+    questions jsonb default '[]'::jsonb,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 11. Create lab_exam_sessions table (Student Exam Submissions & Answers)
+create table if not exists public.lab_exam_sessions (
+    id text primary key,
+    exam_id text not null,
+    student_id text not null,
+    student_name text,
+    roll_number text,
+    class_level text,
+    workstation_ip text,
+    status text default 'submitted',
+    started_at text,
+    submitted_at text,
+    answers jsonb default '{}'::jsonb,
+    auto_score numeric default 0,
+    final_score numeric default 0,
+    total_marks numeric default 25,
+    percentage numeric default 0,
+    passed boolean default false,
+    is_evaluated boolean default false,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 12. Create site_store table (Stores curriculum hierarchy, academic sessions, notices)
+create table if not exists public.site_store (
+    key text primary key,
+    data jsonb not null,
+    updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable Row Level Security (RLS) on all 12 tables
+alter table public.pdf_chapters enable row level security;
+alter table public.learning_resources enable row level security;
+alter table public.study_materials enable row level security;
+alter table public.quizzes enable row level security;
+alter table public.question_bank enable row level security;
+alter table public.quiz_attempts enable row level security;
+alter table public.doubt_queries enable row level security;
+alter table public.user_logins enable row level security;
+alter table public.profiles enable row level security;
+alter table public.lab_exams enable row level security;
+alter table public.lab_exam_sessions enable row level security;
+alter table public.site_store enable row level security;
+
+-- Drop and recreate permissive RLS policies for clean idempotent execution
+drop policy if exists "Allow all access on pdf_chapters" on public.pdf_chapters;
+drop policy if exists "Allow all access on learning_resources" on public.learning_resources;
+drop policy if exists "Allow all access on study_materials" on public.study_materials;
+drop policy if exists "Allow all access on quizzes" on public.quizzes;
+drop policy if exists "Allow all access on question_bank" on public.question_bank;
+drop policy if exists "Allow all access on quiz_attempts" on public.quiz_attempts;
+drop policy if exists "Allow all access on doubt_queries" on public.doubt_queries;
+drop policy if exists "Allow all access on user_logins" on public.user_logins;
+drop policy if exists "Allow all access on profiles" on public.profiles;
+drop policy if exists "Allow all access on lab_exams" on public.lab_exams;
+drop policy if exists "Allow all access on lab_exam_sessions" on public.lab_exam_sessions;
+drop policy if exists "Allow all access on site_store" on public.site_store;
+
+create policy "Allow all access on pdf_chapters" on public.pdf_chapters for all using (true) with check (true);
+create policy "Allow all access on learning_resources" on public.learning_resources for all using (true) with check (true);
+create policy "Allow all access on study_materials" on public.study_materials for all using (true) with check (true);
+create policy "Allow all access on quizzes" on public.quizzes for all using (true) with check (true);
+create policy "Allow all access on question_bank" on public.question_bank for all using (true) with check (true);
+create policy "Allow all access on quiz_attempts" on public.quiz_attempts for all using (true) with check (true);
+create policy "Allow all access on doubt_queries" on public.doubt_queries for all using (true) with check (true);
+create policy "Allow all access on user_logins" on public.user_logins for all using (true) with check (true);
+create policy "Allow all access on profiles" on public.profiles for all using (true) with check (true);
+create policy "Allow all access on lab_exams" on public.lab_exams for all using (true) with check (true);
+create policy "Allow all access on lab_exam_sessions" on public.lab_exam_sessions for all using (true) with check (true);
+create policy "Allow all access on site_store" on public.site_store for all using (true) with check (true);
+
+-- Create Supabase Storage bucket for PDF materials
+insert into storage.buckets (id, name, public)
+values ('pdf-materials', 'pdf-materials', true)
+on conflict (id) do update set public = true;
+
+-- Storage bucket security policies for pdf-materials
+drop policy if exists "Public Access to pdf-materials" on storage.objects;
+drop policy if exists "Allow uploads to pdf-materials" on storage.objects;
+drop policy if exists "Allow updates/deletes in pdf-materials" on storage.objects;
+
+create policy "Public Access to pdf-materials"
+on storage.objects for select
+using ( bucket_id = 'pdf-materials' );
+
+create policy "Allow uploads to pdf-materials"
+on storage.objects for insert
+with check ( bucket_id = 'pdf-materials' );
+
+create policy "Allow updates/deletes in pdf-materials"
+on storage.objects for update
+using ( bucket_id = 'pdf-materials' );`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(fullSupabaseSqlScript);
+    setCopiedSql(true);
+    showToast('SQL Script copied to clipboard! Paste it into Supabase SQL Editor.', 'success');
+    setTimeout(() => setCopiedSql(false), 3000);
   };
 
   // Reusable Confirmation Dialog State
@@ -2353,6 +2710,137 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onBackToHome }) 
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Supabase & Cloud Deployment Health Monitor */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 shadow-xs">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-slate-900">Supabase & Database Deployment Monitor</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      supabaseTestResult?.connected 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : isSupabaseConfigured() 
+                        ? 'bg-blue-100 text-blue-800' 
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {supabaseTestResult?.connected ? 'Live Connected' : isSupabaseConfigured() ? 'Configured' : 'Needs Setup'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Live verification of database tables, RLS policies, storage bucket, and latency for deployment.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleTestSupabase}
+                  disabled={supabaseTesting}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-4 h-4 ${supabaseTesting ? 'animate-spin' : ''}`} />
+                  <span>{supabaseTesting ? 'Testing Connection...' : 'Test Supabase Connection'}</span>
+                </button>
+                <button
+                  onClick={handleSyncAllToSupabase}
+                  disabled={supabaseSyncing}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                  title="Pushes all currently loaded curriculum, resources, questions, quizzes, exams, and student accounts to Supabase"
+                >
+                  <UploadCloud className={`w-4 h-4 ${supabaseSyncing ? 'animate-spin' : ''}`} />
+                  <span>{supabaseSyncing ? 'Saving to Supabase...' : 'Save All App Data to Supabase'}</span>
+                </button>
+                <button
+                  onClick={() => setShowSqlModal(true)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-slate-500" />
+                  <span>View SQL Schema & Setup</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Diagnostics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-500">API Endpoint</span>
+                  <span className={`font-mono text-[11px] font-bold ${isSupabaseConfigured() ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {getSupabaseConfig().url ? 'Configured' : 'Missing Env Var'}
+                  </span>
+                </div>
+                <p className="font-mono text-xs text-slate-700 truncate" title={getSupabaseConfig().url}>
+                  {getSupabaseConfig().url || 'https://your-project.supabase.co'}
+                </p>
+                <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-500">
+                  <span className={`w-2 h-2 rounded-full ${getSupabaseConfig().hasAnonKey ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  <span>Anon Key: {getSupabaseConfig().hasAnonKey ? 'Present (Protected)' : 'Missing'}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-500">Response Latency</span>
+                  <Activity className="w-4 h-4 text-blue-500" />
+                </div>
+                <p className="text-2xl font-black text-slate-900">
+                  {supabaseTestResult ? `${supabaseTestResult.latencyMs} ms` : '—'}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {supabaseTestResult ? (supabaseTestResult.latencyMs < 300 ? '⚡ Ultra Fast (<300ms)' : 'Normal Response Time') : 'Click "Test Supabase Connection" to measure'}
+                </p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-500">Storage Bucket</span>
+                  <span className="font-mono text-[11px] text-slate-400">pdf-materials</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${supabaseTestResult?.storage.pdfMaterialsBucket.ok ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                  <span className="text-xs font-bold text-slate-800">
+                    {supabaseTestResult?.storage.pdfMaterialsBucket.ok ? 'Public Bucket Active' : 'Ready / Standby'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Stores uploaded PDF chapters and board materials.
+                </p>
+              </div>
+            </div>
+
+            {/* Table Health Badges if test was run */}
+            {supabaseTestResult && (
+              <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200/80 space-y-3 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Table Accessibility Verification (12 Tables):</span>
+                  </p>
+                  <span className="text-[11px] text-emerald-700 font-medium">{supabaseTestResult.message}</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+                  {Object.entries(supabaseTestResult.tables).map(([tableName, status]) => (
+                    <div key={tableName} className={`p-2.5 rounded-xl border flex flex-col gap-1 ${
+                      status.ok ? 'bg-white border-emerald-200 text-emerald-900 shadow-xs' : 'bg-rose-50 border-rose-200 text-rose-900'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-[11px] truncate">{tableName}</span>
+                        <span className={`w-2 h-2 rounded-full ${status.ok ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">
+                        {status.ok ? `${status.count ?? 0} records` : (status.error?.substring(0, 20) || 'Check RLS')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -7467,6 +7955,96 @@ export const AdminPanelView: React.FC<AdminPanelViewProps> = ({ onBackToHome }) 
               setShowChapterPdfUploader(false);
               showToast('Chapter PDF uploaded and added to library!');
             }} />
+          </div>
+        </div>
+      )}
+
+      {/* SUPABASE SQL & RENDER DEPLOYMENT MODAL */}
+      {showSqlModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-8 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Supabase SQL & Render Deployment Guide</h3>
+                  <p className="text-xs text-slate-500">Copy database script and verify Render environment variables</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSqlModal(false)} 
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Step-by-Step Deployment Instructions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                <p className="font-extrabold text-slate-900 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
+                  <span>Supabase SQL Setup</span>
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600 pl-1 leading-relaxed">
+                  <li>Go to your <strong>Supabase Dashboard</strong>.</li>
+                  <li>Click <strong>SQL Editor</strong> on the left sidebar.</li>
+                  <li>Click <strong>New Query</strong>, paste the script below, and click <strong>Run</strong>.</li>
+                  <li>All tables and the <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">pdf-materials</code> storage bucket will be created automatically.</li>
+                </ol>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                <p className="font-extrabold text-slate-900 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">2</span>
+                  <span>Render Environment Variables</span>
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1 leading-relaxed">
+                  <li><code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">VITE_SUPABASE_URL</code> (Project URL)</li>
+                  <li><code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">VITE_SUPABASE_ANON_KEY</code> (Anon Public Key)</li>
+                  <li><code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">PORT</code>: <span className="font-mono">3000</span></li>
+                  <li><code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">NODE_ENV</code>: <span className="font-mono">production</span></li>
+                </ul>
+              </div>
+            </div>
+
+            {/* SQL Code Block with Copy Button */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700">Supabase DDL & RLS Policies (Safe Idempotent Script):</span>
+                <button
+                  onClick={handleCopySql}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{copiedSql ? 'Copied!' : 'Copy SQL Script'}</span>
+                </button>
+              </div>
+
+              <pre className="p-4 bg-slate-900 text-slate-100 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-56 leading-relaxed border border-slate-800">
+                {fullSupabaseSqlScript}
+              </pre>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setShowSqlModal(false);
+                  handleTestSupabase();
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Run Connection Test Now
+              </button>
+              <button
+                onClick={() => setShowSqlModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

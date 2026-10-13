@@ -241,7 +241,14 @@ const MainLayout: React.FC = () => {
 
             {currentTab === 'qbank' && <QuestionBankView onStartQuiz={handleStartQuiz} />}
 
-            {currentTab === 'about' && <AboutView setCurrentTab={setCurrentTab} />}
+            {currentTab === 'about' && (
+              <AboutView
+                setCurrentTab={tab => {
+                  setCurrentTab(tab);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            )}
 
             {currentTab === 'contact' && <ContactView />}
 
@@ -293,17 +300,6 @@ const MainLayout: React.FC = () => {
                 </div>
               )
             )}
-
-            {currentTab === 'about' && (
-              <AboutView
-                setCurrentTab={tab => {
-                  setCurrentTab(tab);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            )}
-
-            {currentTab === 'contact' && <ContactView />}
 
             {(['error', '402', '404', '500', 'offline'].includes(currentTab)) && (
               <ErrorView

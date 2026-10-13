@@ -343,6 +343,24 @@ Return ONLY a valid JSON array of ${targetCount} objects adhering to the specifi
     });
   });
 
+  // Supabase runtime configuration and health probe
+  app.get('/api/supabase/config', (_req, res) => {
+    const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+    const configured = Boolean(
+      url &&
+      anonKey &&
+      !url.includes('your-project-id') &&
+      url.startsWith('https://')
+    );
+    res.json({
+      configured,
+      url: configured ? url : '',
+      anonKey: configured ? anonKey : '',
+      renderNodeEnv: process.env.NODE_ENV || 'development'
+    });
+  });
+
   // REST API Endpoints
   app.post('/api/quizzes/broadcast', (req, res) => {
     const { quiz, action } = req.body;
